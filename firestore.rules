@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - role: string (required, enum: ["Independent Seeker", "Dependent Seeker", "Parent/Guardian", "Mahram"])
+    //   - gender: string (enum: ["male", "female"])
+    //   - requiresParentalVetting: bool
+    //   - parentUid: string
+    //   - isIntroCompleted: bool
+    //
+    // Collection: connections
+    // Fields:
+    //   - senderUid: string (required)
+    //   - receiverUid: string (required)
+    //   - status: string (required, enum: ["pending_parent_approval", "pending_receiver_approval", "approved", "declined"])
+    //   - parentApprovalStatus: string
+    //   - mahramUid: string
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "backupe9@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.role in ["Independent Seeker", "Dependent Seeker", "Parent/Guardian", "Mahram"] &&
+             data.uid == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /connections/{connectionId} {
+      function isParticipant() {
+        return isAuthenticated() && (
+          request.auth.uid == resource.data.senderUid || 
+          request.auth.uid == resource.data.receiverUid ||
+          request.auth.uid == resource.data.mahramUid ||
+          request.auth.uid == get(/databases/$(database)/documents/users/$(resource.data.senderUid)).data.parentUid ||
+          request.auth.uid == get(/databases/$(database)/documents/users/$(resource.data.receiverUid)).data.parentUid
+        );
+      }
+
+      allow read: if isParticipant();
+      allow create: if isAuthenticated();
+      allow update: if isParticipant();
+
+      match /messages/{messageId} {
+        allow read: if isParticipant();
+        allow create: if isParticipant();
+      }
+    }
+  }
+}

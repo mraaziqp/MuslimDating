@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the NikahPath platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { 
+          "type": "string", 
+          "enum": ["Independent Seeker", "Dependent Seeker", "Parent/Guardian", "Mahram"] 
+        },
+        "gender": { "type": "string", "enum": ["male", "female"] },
+        "requiresParentalVetting": { "type": "boolean", "description": "For male seekers" },
+        "parentUid": { "type": "string", "description": "UID of the Parent/Guardian" },
+        "isIntroCompleted": { "type": "boolean", "description": "Marriage Readiness Hub completion" },
+        "photoUrl": { "type": "string" },
+        "bio": { "type": "string" },
+        "age": { "type": "number" },
+        "location": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Connection": {
+      "title": "Connection",
+      "description": "A match request or active connection between seekers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderUid": { "type": "string" },
+        "receiverUid": { "type": "string" },
+        "status": { 
+          "type": "string", 
+          "enum": ["pending_parent_approval", "pending_receiver_approval", "approved", "declined"] 
+        },
+        "parentApprovalStatus": { "type": "string", "enum": ["pending", "approved", "declined"] },
+        "mahramUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderUid", "receiverUid", "status"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A message in a chaperoned chat.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "senderUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text", "senderUid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/connections/{connectionId}": {
+      "schema": "Connection",
+      "description": "Match requests and active connections"
+    },
+    "/connections/{connectionId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Chaperoned chat messages"
+    }
+  }
+}
