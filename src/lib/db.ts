@@ -7,6 +7,12 @@ import * as schema from "./schema";
  * DATABASE_URL must be set in .env.local (Next.js) or your deployment environment.
  * Format: postgresql://user:password@host/dbname?sslmode=require
  */
-const sql = neon(process.env.DATABASE_URL!);
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL is not set. Add it to Vercel → Project → Settings → Environment Variables."
+  );
+}
+
+const sql = neon(process.env.DATABASE_URL);
 
 export const db = drizzle(sql, { schema });

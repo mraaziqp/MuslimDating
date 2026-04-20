@@ -14,13 +14,37 @@ import {
 } from "../src/actions/user.js";
 import { db } from "../src/lib/db.js";
 import { users } from "../src/lib/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { UserRole } from "../src/lib/schema.js";
 
 const app = express();
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "nikahpath-dev-secret";
+
+// ─── GET /api/health ─────────────────────────────────────────────────────────
+// Quick env/db connectivity diagnostic — safe to hit from browser
+app.get("/api/health", async (_req, res) => {
+  const missing: string[] = [];
+  if (!process.env.DATABASE_URL) missing.push("DATABASE_URL");
+  if (!process.env.JWT_SECRET)   missing.push("JWT_SECRET");
+
+  if (missing.length > 0) {
+    return res.status(500).json({
+      ok: false,
+      error: `Missing environment variables: ${missing.join(", ")}. Set them in Vercel → Project → Settings → Environment Variables, then redeploy.`,
+    });
+  }
+
+  try {
+    // Simple ping — just check we can reach the DB
+    await db.execute(sql`SELECT 1`);
+    return res.json({ ok: true, env: "all required vars present", db: "reachable" });
+  } catch (err: unknown) {
+    const e = err as { message?: string };
+    return res.status(500).json({ ok: false, env: "all required vars present", db: e?.message ?? String(err) });
+  }
+});
 
 function mapAuthRouteError(err: unknown): { status: number; message: string } {
   const e = err as { code?: string; message?: string };
@@ -42,10 +66,16 @@ function mapAuthRouteError(err: unknown): { status: number; message: string } {
   }
 
   // Common connection/config errors
-  if (e?.message?.includes("DATABASE_URL") || e?.message?.includes("ECONN") || e?.message?.includes("ENOTFOUND")) {
+  if (
+    e?.message?.includes("DATABASE_URL") ||
+    e?.message?.includes("ECONN") ||
+    e?.message?.includes("ENOTFOUND") ||
+    e?.message?.includes("Invalid URL") ||
+    e?.message?.includes("not set")
+  ) {
     return {
       status: 500,
-      message: "Database connection failed. Verify DATABASE_URL in deployment environment.",
+      message: "Database connection failed — DATABASE_URL is missing or invalid in your deployment env vars. Check Vercel → Project → Settings → Environment Variables.",
     };
   }
 
