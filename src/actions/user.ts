@@ -12,6 +12,8 @@ export interface SyncUserParams {
   phone?: string;
   displayName?: string;
   gender?: string;
+  age?: number;
+  location?: string;
   requiresParentalVetting?: boolean;
 }
 
@@ -41,7 +43,7 @@ export interface UpdateProfileParams {
 // ─── syncUserWithDb ─────────────────────────────────────────────────────────
 
 export async function syncUserWithDb(params: SyncUserParams): Promise<User> {
-  const { firebaseUid, email, phone, displayName, gender, requiresParentalVetting } = params;
+  const { firebaseUid, email, phone, displayName, gender, age, location, requiresParentalVetting } = params;
 
   // Admin email always gets PARENT role regardless of what was submitted
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -56,6 +58,8 @@ export async function syncUserWithDb(params: SyncUserParams): Promise<User> {
       role: effectiveRole,
       displayName: displayName ?? null,
       gender: gender ?? null,
+      age: age ?? null,
+      location: location ?? null,
       requiresParentalVetting: requiresParentalVetting ?? false,
     })
     .onConflictDoNothing({ target: users.firebaseUid });

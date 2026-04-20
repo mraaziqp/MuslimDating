@@ -17,7 +17,7 @@ app.use(express.json());
 
 // ─── POST /api/users/sync ────────────────────────────────────────────────────
 app.post("/api/users/sync", async (req, res) => {
-  const { firebaseUid, email, role, phone, displayName, gender, requiresParentalVetting } =
+  const { firebaseUid, email, role, phone, displayName, gender, age, location, requiresParentalVetting } =
     req.body as {
       firebaseUid: string;
       email: string;
@@ -25,15 +25,18 @@ app.post("/api/users/sync", async (req, res) => {
       phone?: string;
       displayName?: string;
       gender?: string;
+      age?: number;
+      location?: string;
       requiresParentalVetting?: boolean;
     };
 
   if (!firebaseUid || !email || !role) {
+    console.error("[POST /api/users/sync] missing fields", { firebaseUid: !!firebaseUid, email: !!email, role: !!role });
     return res.status(400).json({ error: "firebaseUid, email, and role are required." });
   }
 
   try {
-    const user = await syncUserWithDb({ firebaseUid, email, role, phone, displayName, gender, requiresParentalVetting });
+    const user = await syncUserWithDb({ firebaseUid, email, role, phone, displayName, gender, age, location, requiresParentalVetting });
     return res.json(user);
   } catch (err) {
     console.error("[POST /api/users/sync]", err);

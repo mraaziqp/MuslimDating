@@ -9,6 +9,8 @@ export interface SyncOptions {
   phone?: string;
   displayName?: string;
   gender?: string;
+  age?: number;
+  location?: string;
   requiresParentalVetting?: boolean;
 }
 
@@ -115,28 +117,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     role: UserRole,
     options?: SyncOptions
   ): Promise<DbUser | null> => {
-    if (!firebaseUser) return null;
+    // Use auth.currentUser as the authoritative source to avoid React state timing issues
+    const currentUser = auth.currentUser ?? firebaseUser;
+    if (!currentUser) return null;
+
+    const email = currentUser.email;
+    if (!email) return null;
 
     try {
       const res = await fetch("/api/users/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firebaseUid: firebaseUser.uid,
-          email: firebaseUser.email ?? "",
+          firebaseUid: currentUser.uid,
+          email,
           role,
           phone: options?.phone,
           displayName: options?.displayName,
           gender: options?.gender,
+          age: options?.age,
+          location: options?.location,
           requiresParentalVetting: options?.requiresParentalVetting ?? false,
         }),
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.error("[syncUser] server error", res.status, await res.text().catch(() => ''));
+        return null;
+      }
       const user: DbUser = await res.json();
       setDbUser(user);
       return user;
-    } catch {
+    } catch (err) {
+      console.error("[syncUser] fetch failed", err);
       return null;
     }
   };
