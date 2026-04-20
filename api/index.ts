@@ -12,6 +12,8 @@ type Req = {
 	url?: string;
 	headers: Record<string, string | string[] | undefined>;
 	body?: unknown;
+	complete?: boolean;
+	readableEnded?: boolean;
 	on: (event: string, cb: (chunk: Buffer) => void) => void;
 };
 
@@ -49,10 +51,33 @@ async function readJsonBody(req: Req): Promise<Record<string, unknown>> {
 		return req.body as Record<string, unknown>;
 	}
 
+	if (typeof req.body === "string") {
+		try {
+			return JSON.parse(req.body) as Record<string, unknown>;
+		} catch {
+			return {};
+		}
+	}
+
+	if (Buffer.isBuffer(req.body)) {
+		try {
+			return JSON.parse(req.body.toString("utf8")) as Record<string, unknown>;
+		} catch {
+			return {};
+		}
+	}
+
+	// In some serverless runtimes, the stream may already be consumed/ended.
+	if (req.complete || req.readableEnded) return {};
+
 	const chunks: Buffer[] = [];
 	await new Promise<void>((resolve) => {
+		const timeout = setTimeout(() => resolve(), 5000);
 		req.on("data", (chunk) => chunks.push(chunk));
-		req.on("end", () => resolve());
+		req.on("end", () => {
+			clearTimeout(timeout);
+			resolve();
+		});
 	});
 
 	if (chunks.length === 0) return {};
