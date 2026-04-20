@@ -46,6 +46,13 @@ app.get("/api/health", async (_req, res) => {
   }
 });
 
+// Global API error handler so serverless failures return JSON instead of hard crash pages
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("[UNHANDLED API ERROR]", err);
+  const message = (err as { message?: string })?.message ?? "Internal server error";
+  return res.status(500).json({ error: message });
+});
+
 function mapAuthRouteError(err: unknown): { status: number; message: string } {
   const e = err as { code?: string; message?: string };
 
