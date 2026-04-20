@@ -80,11 +80,18 @@ export const Onboarding: React.FC = () => {
     setAuthLoading(true);
 
     const readErrorMessage = async (response: Response, fallback: string) => {
+      if (response.status >= 500) {
+        return 'Server is temporarily unavailable. Please try again in a moment.';
+      }
+
       try {
         const data = await response.json();
         return data?.error ?? fallback;
       } catch {
         const text = await response.text().catch(() => '');
+        if (text.includes('FUNCTION_INVOCATION_FAILED') || text.includes('A server error has occurred')) {
+          return 'Server is temporarily unavailable. Please try again in a moment.';
+        }
         return text || fallback;
       }
     };
@@ -163,9 +170,9 @@ export const Onboarding: React.FC = () => {
     } catch (error) {
       console.error('[handleEmailAuth] network/parsing failure', error);
       if (error instanceof DOMException && error.name === 'AbortError') {
-        toast.error('Request timed out. Please try again.');
+        toast.error('Server is temporarily unavailable. Please try again in a moment.');
       } else {
-        toast.error('Request failed. Please try again.');
+        toast.error('Server is temporarily unavailable. Please try again in a moment.');
       }
     } finally {
       setAuthLoading(false);
