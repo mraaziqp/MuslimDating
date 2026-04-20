@@ -2,17 +2,18 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, LogOut, BookOpen, ShieldCheck, MessageSquare, UserCircle, Menu, X, LayoutDashboard } from 'lucide-react';
 import { useAuth } from './AuthProvider';
-import { auth } from '../lib/firebase';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 
 export const Navbar: React.FC = () => {
-  const { firebaseUser, dbUser } = useAuth();
+  const { firebaseUser, dbUser, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const isLoggedIn = !!(firebaseUser || dbUser);
+
   const handleLogout = async () => {
-    await auth.signOut();
+    await logout();
     setMobileMenuOpen(false);
     navigate('/');
   };
@@ -29,7 +30,7 @@ export const Navbar: React.FC = () => {
           </Link>
 
           <div className="hidden md:flex items-center space-x-8">
-            {firebaseUser && dbUser && (
+            {isLoggedIn && dbUser && (
               <>
                 {(dbUser.role === 'SOLO' || dbUser.role === 'DEPENDENT') && (
                   <Link to="/feed" className="text-sm font-medium text-slate-600 hover:text-rose-600 transition-colors">Find Matches</Link>
@@ -51,11 +52,13 @@ export const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
-            {firebaseUser ? (
+            {isLoggedIn ? (
               <>
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={firebaseUser.photoURL ?? undefined} />
-                  <AvatarFallback>{firebaseUser.displayName?.charAt(0) || firebaseUser.email?.charAt(0)}</AvatarFallback>
+                  <AvatarImage src={firebaseUser?.photoURL ?? undefined} />
+                  <AvatarFallback>
+                    {(dbUser?.displayName || firebaseUser?.displayName || firebaseUser?.email || dbUser?.email || 'U').charAt(0).toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
                 <Button variant="ghost" size="icon" onClick={handleLogout} className="hidden md:flex">
                   <LogOut className="h-5 w-5 text-slate-600" />
@@ -80,7 +83,7 @@ export const Navbar: React.FC = () => {
       </div>
 
       {/* Mobile dropdown menu */}
-      {mobileMenuOpen && firebaseUser && dbUser && (
+      {mobileMenuOpen && isLoggedIn && dbUser && (
         <div className="md:hidden border-t bg-white shadow-lg">
           <div className="px-4 py-2 space-y-0.5">
             {(dbUser.role === 'SOLO' || dbUser.role === 'DEPENDENT') && (

@@ -25,9 +25,9 @@ const ROLE_HOME: Record<UserRole, string> = {
 
 /** Redirects unauthenticated users to /onboarding */
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { firebaseUser, loading } = useAuth();
+  const { firebaseUser, dbUser, loading } = useAuth();
   if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
-  if (!firebaseUser) return <Navigate to="/onboarding" />;
+  if (!firebaseUser && !dbUser) return <Navigate to="/onboarding" />;
   return <>{children}</>;
 };
 
@@ -43,7 +43,7 @@ const RoleProtectedRoute: React.FC<{
 }> = ({ children, allowedRoles }) => {
   const { firebaseUser, dbUser, loading } = useAuth();
   if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
-  if (!firebaseUser) return <Navigate to="/onboarding" replace />;
+  if (!firebaseUser && !dbUser) return <Navigate to="/onboarding" replace />;
   if (!dbUser) return <Navigate to="/onboarding" replace />;
   if (!allowedRoles.includes(dbUser.role)) {
     return <Navigate to={ROLE_HOME[dbUser.role]} replace />;

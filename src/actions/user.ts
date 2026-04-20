@@ -19,6 +19,7 @@ export interface SyncUserParams {
 
 export interface UpdateProfileParams {
   firebaseUid: string;
+  role?: UserRole;
   displayName?: string;
   gender?: string;
   age?: number;
@@ -44,16 +45,17 @@ export interface UpdateProfileParams {
 
 export async function syncUserWithDb(params: SyncUserParams): Promise<User> {
   const { firebaseUid, email, phone, displayName, gender, age, location, requiresParentalVetting } = params;
+  const normalizedEmail = email.toLowerCase().trim();
 
   // Admin email always gets PARENT role regardless of what was submitted
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const effectiveRole: UserRole = (adminEmail && email === adminEmail) ? 'PARENT' : params.role;
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+  const effectiveRole: UserRole = adminEmail && normalizedEmail === adminEmail ? 'PARENT' : params.role;
 
   await db
     .insert(users)
     .values({
       firebaseUid,
-      email,
+      email: normalizedEmail,
       phone: phone ?? null,
       role: effectiveRole,
       displayName: displayName ?? null,
@@ -65,7 +67,7 @@ export async function syncUserWithDb(params: SyncUserParams): Promise<User> {
     .onConflictDoNothing({ target: users.firebaseUid });
 
   // If this is the admin account, ensure the role is always PARENT even on re-sync
-  if (adminEmail && email === adminEmail) {
+  if (adminEmail && normalizedEmail === adminEmail) {
     await db
       .update(users)
       .set({ role: 'PARENT' })
@@ -100,6 +102,7 @@ export async function updateProfile(params: UpdateProfileParams): Promise<User> 
 
   // Build update object — only include keys explicitly provided
   const patch: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
+  if (fields.role !== undefined) patch.role = fields.role;
   if (fields.displayName !== undefined) patch.displayName = fields.displayName;
   if (fields.gender !== undefined) patch.gender = fields.gender;
   if (fields.age !== undefined) patch.age = fields.age;

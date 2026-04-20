@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
@@ -39,7 +39,10 @@ export const Onboarding: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { syncUser } = useAuth();
+  const { syncUser, loginWithJwt, dbUser } = useAuth();
+
+  // Tracks whether this session was authenticated via JWT (email/password)
+  const [isJwtSession, setIsJwtSession] = useState(false);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -68,79 +71,109 @@ export const Onboarding: React.FC = () => {
 
     try {
       if (authMode === 'signin') {
-        const result = await signInWithEmailAndPassword(auth, email.trim(), password);
-        const fbUser = result.user;
-        const res = await fetch(`/api/users/me?firebaseUid=${encodeURIComponent(fbUser.uid)}`);
+        // Try login first
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
         if (res.ok) {
-          const dbUser = await res.json();
-          navigate(ROLE_HOME[dbUser.role as UserRole]);
+          const { token, user } = await res.json();
+          loginWithJwt(token, user);
+          const needsProfileCompletion = !user.displayName || !user.gender;
+          if (needsProfileCompletion) {
+            setIsJwtSession(true);
+            setDisplayName(user.displayName ?? email.split('@')[0]);
+            setStep(2);
+          } else {
+            navigate(ROLE_HOME[user.role as UserRole]);
+          }
+          return;
+        }
+        const err = await res.json();
+        if (res.status === 401) {
+          // Wrong password
+          toast.error('Incorrect email or password.');
         } else {
-          setDisplayName(fbUser.displayName || '');
-          setStep(2);
+          // 404-style: account not found — auto-switch to signup
+          toast.info('No account found — creating one for you...');
+          setAuthMode('signup');
+          const regRes = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email.trim(), password }),
+          });
+          if (regRes.ok) {
+            const { token, user: newUser } = await regRes.json();
+            loginWithJwt(token, newUser);
+            setIsJwtSession(true);
+            setDisplayName(email.split('@')[0]);
+            setStep(2);
+          } else {
+            const regErr = await regRes.json();
+            toast.error(regErr.error ?? 'Failed to create account.');
+          }
         }
       } else {
-        if (password.length < 6) {
-          toast.error("Password must be at least 6 characters");
-          return;
-        }
-        const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        // Strip the local part of the email as a default display name
-        const defaultName = email.split('@')[0];
-        await updateProfile(result.user, { displayName: defaultName });
-        setDisplayName(defaultName);
-        setStep(2);
-      }
-    } catch (err: any) {
-      const code = err?.code as string;
-      if (authMode === 'signin' && (code === 'auth/user-not-found' || code === 'auth/invalid-credential')) {
-        // Account doesn't exist — automatically switch to Create Account and retry
-        setAuthMode('signup');
-        toast.info("No account found — creating a new account for you...");
-        setAuthLoading(true);
-        try {
-          if (password.length < 6) {
-            toast.error("Password must be at least 6 characters");
-            return;
-          }
-          const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
-          const defaultName = email.split('@')[0];
-          await updateProfile(result.user, { displayName: defaultName });
-          setDisplayName(defaultName);
+        // Explicit signup
+        if (password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        if (res.ok) {
+          const { token, user } = await res.json();
+          loginWithJwt(token, user);
+          setIsJwtSession(true);
+          setDisplayName(email.split('@')[0]);
           setStep(2);
-          return;
-        } catch (createErr: any) {
-          const createCode = createErr?.code as string;
-          if (createCode === 'auth/email-already-in-use') {
-            toast.error("Account exists but password is incorrect. Please try again.");
+        } else {
+          const err = await res.json();
+          if (res.status === 409) {
+            toast.error('Account already exists — sign in instead.');
             setAuthMode('signin');
           } else {
-            toast.error("Failed to create account. Please try again.");
+            toast.error(err.error ?? 'Failed to create account.');
           }
-        } finally {
-          setAuthLoading(false);
         }
-        return;
-      } else if (code === 'auth/wrong-password') {
-        toast.error("Incorrect password. Please try again.");
-      } else if (code === 'auth/email-already-in-use') {
-        toast.error("Account already exists — signing you in instead");
-        setAuthMode('signin');
-      } else if (code === 'auth/invalid-email') {
-        toast.error("Please enter a valid email address");
-      } else if (code === 'auth/weak-password') {
-        toast.error("Password must be at least 6 characters");
-      } else {
-        console.error("[handleEmailAuth]", code, err?.message);
-        toast.error("Authentication failed. Please try again.");
       }
+    } catch {
+      toast.error('Network error. Please try again.');
     } finally {
       setAuthLoading(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (!auth.currentUser) return;
+    // JWT session users: update profile via PUT (already have a DB record from register)
+    if (isJwtSession) {
+      if (!dbUser?.firebaseUid) { toast.error('Session error — please sign in again.'); return; }
+      const res = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firebaseUid: dbUser.firebaseUid,
+          displayName: displayName || undefined,
+          gender,
+          age: age ? parseInt(age, 10) : undefined,
+          location: location || undefined,
+          role,
+          requiresParentalVetting: role === 'DEPENDENT' ? true : requiresParentalVetting,
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        toast.success('Profile created!');
+        navigate(ROLE_HOME[saved.role as UserRole]);
+      } else {
+        toast.error('Failed to save profile.');
+      }
+      return;
+    }
 
+    // Google OAuth users
+    if (!auth.currentUser) return;
     try {
       const savedUser = await syncUser(role, {
         displayName,
@@ -149,17 +182,12 @@ export const Onboarding: React.FC = () => {
         location: location || undefined,
         requiresParentalVetting: role === 'DEPENDENT' ? true : requiresParentalVetting,
       });
-
-      if (!savedUser) {
-        toast.error("Failed to save profile. Please try again.");
-        return;
-      }
-
-      toast.success("Profile created!");
+      if (!savedUser) { toast.error('Failed to save profile. Please try again.'); return; }
+      toast.success('Profile created!');
       navigate(ROLE_HOME[savedUser.role]);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save profile");
+      toast.error('Failed to save profile');
     }
   };
 

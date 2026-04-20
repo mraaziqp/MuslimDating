@@ -32,10 +32,13 @@ export const connectionStatusEnum = pgEnum("connection_status", [
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
 
-  // Firebase UID — the stable join key between Firebase Auth and this DB
+  // Firebase UID — kept as the stable join key; for email/password users this is
+  // populated with a generated UUID on registration (no Firebase dependency)
   firebaseUid: text("firebase_uid").notNull().unique(),
 
   email: text("email").notNull().unique(),
+  // Bcrypt hash — null for Google OAuth users
+  passwordHash: text("password_hash"),
   phone: text("phone"),
   role: userRoleEnum("role").notNull(),
 

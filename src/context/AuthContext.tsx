@@ -3,6 +3,8 @@ import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import type { User as DbUser, UserRole } from "../lib/schema";
 
+const JWT_KEY = "nikahpath_jwt";
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export interface SyncOptions {
@@ -14,17 +16,8 @@ export interface SyncOptions {
   requiresParentalVetting?: boolean;
 }
 
-/**
- * DbUser extended with `uid` (= firebaseUid) so existing Firestore-based
- * components that destructure `profile.uid` keep working.
- *
- * The optional legacy fields below existed in the old Firestore schema.
- * They are `undefined` after migrating to Neon and should be removed from
- * each component as it is migrated over.
- */
 export type ProfileCompat = DbUser & {
   uid: string;
-  // ── Legacy Firestore fields (deprecated — remove per-component as migrated) ──
   displayName?: string;
   gender?: string;
   isIntroCompleted?: boolean;
@@ -33,26 +26,17 @@ export type ProfileCompat = DbUser & {
 };
 
 export interface AuthContextType {
-  // ── New canonical API ──────────────────────────────────────────────────
   firebaseUser: FirebaseUser | null;
-  /** Full Neon DB row. Null until the user completes onboarding. */
   dbUser: DbUser | null;
-  /** Allows components to update the cached dbUser after a profile mutation */
   setDbUser: React.Dispatch<React.SetStateAction<DbUser | null>>;
   loading: boolean;
-  /**
-   * Call after Firebase auth to upsert the user in Neon.
-   * Returns the saved DbUser so callers can immediately route.
-   */
+  /** The stable UID — use this everywhere instead of firebaseUser.uid */
+  currentUid: string | null;
   syncUser: (role: UserRole, options?: SyncOptions) => Promise<DbUser | null>;
-
-  // ── Backward-compat shims (for components not yet migrated) ───────────
-  /** Alias for firebaseUser */
+  /** Call after a successful /api/auth/login or /api/auth/register response */
+  loginWithJwt: (token: string, user: DbUser) => void;
+  logout: () => void;
   user: FirebaseUser | null;
-  /**
-   * Alias for dbUser, augmented with `uid = firebaseUser.uid`
-   * so legacy `profile.uid` reads still resolve to the Firebase UID.
-   */
   profile: ProfileCompat | null;
 }
 
@@ -61,7 +45,10 @@ const AuthContext = createContext<AuthContextType>({
   dbUser: null,
   setDbUser: () => {},
   loading: true,
+  currentUid: null,
   syncUser: async () => null,
+  loginWithJwt: () => {},
+  logout: () => {},
   user: null,
   profile: null,
 });
@@ -70,57 +57,66 @@ export const useAuth = () => useContext(AuthContext);
 
 // ─── Provider ──────────────────────────────────────────────────────────────
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Listen to Firebase auth state; whenever a user is present, fetch their
-  // Neon profile so the rest of the app knows their role immediately.
+  // On mount, check for a stored JWT (email/password users)
+  useEffect(() => {
+    const token = localStorage.getItem(JWT_KEY);
+    if (token) {
+      fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(user => { if (user) setDbUser(user); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }
+    // Firebase listener handles the rest (Google OAuth users)
+  }, []);
+
+  // Firebase auth state — for Google OAuth users
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
 
       if (!fbUser) {
-        setDbUser(null);
-        setLoading(false);
+        // Only set loading=false if no JWT session is active
+        if (!localStorage.getItem(JWT_KEY)) setLoading(false);
         return;
       }
 
       try {
-        const res = await fetch(
-          `/api/users/me?firebaseUid=${encodeURIComponent(fbUser.uid)}`
-        );
-        if (res.ok) {
-          setDbUser(await res.json());
-        } else {
-          // 404 = user authenticated with Firebase but hasn't completed onboarding
-          setDbUser(null);
-        }
+        const res = await fetch(`/api/users/me?firebaseUid=${encodeURIComponent(fbUser.uid)}`);
+        if (res.ok) setDbUser(await res.json());
+        else setDbUser(null);
       } catch {
         setDbUser(null);
       } finally {
         setLoading(false);
       }
     });
-
     return unsubscribe;
   }, []);
 
-  /**
-   * Upsert the current Firebase user into Neon.
-   * Call this at the end of the onboarding form submission.
-   */
-  const syncUser = async (
-    role: UserRole,
-    options?: SyncOptions
-  ): Promise<DbUser | null> => {
-    // Use auth.currentUser as the authoritative source to avoid React state timing issues
+  const loginWithJwt = (token: string, user: DbUser) => {
+    localStorage.setItem(JWT_KEY, token);
+    setDbUser(user);
+  };
+
+  const logout = async () => {
+    localStorage.removeItem(JWT_KEY);
+    setDbUser(null);
+    if (firebaseUser) {
+      await auth.signOut();
+      setFirebaseUser(null);
+    }
+  };
+
+  /** Syncs a Google OAuth user into Neon after onboarding */
+  const syncUser = async (role: UserRole, options?: SyncOptions): Promise<DbUser | null> => {
     const currentUser = auth.currentUser ?? firebaseUser;
     if (!currentUser) return null;
-
     const email = currentUser.email;
     if (!email) return null;
 
@@ -140,9 +136,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           requiresParentalVetting: options?.requiresParentalVetting ?? false,
         }),
       });
-
       if (!res.ok) {
-        console.error("[syncUser] server error", res.status, await res.text().catch(() => ''));
+        console.error("[syncUser] error", res.status, await res.text().catch(() => ""));
         return null;
       }
       const user: DbUser = await res.json();
@@ -154,23 +149,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Build the backward-compat profile shim
+  // The stable UID to use in all API calls
+  const currentUid = dbUser?.firebaseUid ?? firebaseUser?.uid ?? null;
+
   const profile: ProfileCompat | null =
-    dbUser && firebaseUser ? { ...dbUser, uid: firebaseUser.uid } : null;
+    dbUser ? { ...dbUser, uid: currentUid ?? "" } : null;
 
   return (
-    <AuthContext.Provider
-      value={{
-        firebaseUser,
-        dbUser,
-        setDbUser,
-        loading,
-        syncUser,
-        user: firebaseUser,
-        profile,
-      }}
-    >
+    <AuthContext.Provider value={{
+      firebaseUser,
+      dbUser,
+      setDbUser,
+      loading,
+      currentUid,
+      syncUser,
+      loginWithJwt,
+      logout,
+      user: firebaseUser,
+      profile,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
+
