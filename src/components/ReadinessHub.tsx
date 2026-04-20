@@ -69,9 +69,9 @@ export const ReadinessHub: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-8">
-      <header className="text-center space-y-2 py-8">
-        <h1 className="text-4xl font-bold text-slate-900 tracking-tight">Marriage Readiness Hub</h1>
+    <div className="max-w-4xl mx-auto p-3 sm:p-4 space-y-6 sm:space-y-8">
+      <header className="text-center space-y-2 py-4 sm:py-8">
+        <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 tracking-tight">Marriage Readiness Hub</h1>
         <p className="text-slate-600 max-w-2xl mx-auto">
           Equip yourself with the knowledge and etiquette required for a successful, blessed union.
         </p>
@@ -86,16 +86,16 @@ export const ReadinessHub: React.FC = () => {
             transition={{ delay: index * 0.1 }}
           >
             <Card className={`border-none shadow-md ${module.id === 'intro' && !dbUser?.isIntroCompleted ? 'ring-2 ring-rose-500/20' : ''}`}>
-              <CardHeader className="flex flex-row items-start justify-between space-y-0">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <CardTitle className="text-xl">{module.title}</CardTitle>
-                    {module.required && <Badge variant="destructive" className="bg-rose-100 text-rose-600 border-none">Required</Badge>}
+              <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-base sm:text-xl">{module.title}</CardTitle>
+                    {module.required && <Badge variant="destructive" className="bg-rose-100 text-rose-600 border-none text-xs">Required</Badge>}
                   </div>
-                  <CardDescription>{module.description}</CardDescription>
+                  <CardDescription className="text-sm">{module.description}</CardDescription>
                 </div>
-                <div className="bg-slate-100 p-3 rounded-full">
-                  <BookOpen className="h-6 w-6 text-slate-600" />
+                <div className="bg-slate-100 p-2.5 sm:p-3 rounded-full shrink-0">
+                  <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-slate-600" />
                 </div>
               </CardHeader>
               <CardContent>

@@ -122,7 +122,7 @@ export const ChatRoom: React.FC = () => {
   const isMahram = profile?.uid === connection.mahramUid;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 h-[calc(100vh-6rem)] flex flex-col space-y-4">
+    <div className="max-w-4xl mx-auto p-2 sm:p-4 h-[calc(100vh-4.5rem)] sm:h-[calc(100vh-6rem)] flex flex-col gap-2 sm:gap-4">
       {/* Participants Bar */}
       <div className="flex items-center gap-4 px-4 py-2 bg-white rounded-xl shadow-sm border border-slate-100 overflow-x-auto">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
@@ -141,52 +141,52 @@ export const ChatRoom: React.FC = () => {
       </div>
 
       <Card className="flex-1 flex flex-col overflow-hidden border-none shadow-xl">
-        <CardHeader className="border-b bg-white p-4 flex flex-row items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <div className={`p-1 rounded-full transition-all duration-700 ${isBothRevealed ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-                <Avatar className={`h-14 w-14 transition-all duration-700 ${!isBothRevealed ? 'blur-2xl grayscale' : ''}`}>
+        <CardHeader className="border-b bg-white p-3 sm:p-4 flex flex-row items-center justify-between gap-2">
+          <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+            <div className="relative shrink-0">
+              <div className={`p-0.5 sm:p-1 rounded-full transition-all duration-700 ${isBothRevealed ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+                <Avatar className={`h-10 w-10 sm:h-14 sm:w-14 transition-all duration-700 ${!isBothRevealed ? 'blur-2xl grayscale' : ''}`}>
                   <AvatarImage src={otherUser.photoUrl} />
                   <AvatarFallback>{otherUser.displayName[0]}</AvatarFallback>
                 </Avatar>
                 {!isBothRevealed && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Lock className="h-5 w-5 text-white/90 drop-shadow-md" />
+                    <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-white/90 drop-shadow-md" />
                   </div>
                 )}
               </div>
             </div>
-            <div>
-              <CardTitle className="text-xl font-bold text-slate-900">{otherUser.displayName}</CardTitle>
-              <div className="flex items-center space-x-2 mt-1">
+            <div className="min-w-0">
+              <CardTitle className="text-base sm:text-xl font-bold text-slate-900 truncate">{otherUser.displayName}</CardTitle>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
                 <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest bg-slate-50 border-slate-200">
                   {otherUser.role}
                 </Badge>
                 {connection.mahramUid && (
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 text-[10px] font-bold">
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 text-[10px] font-bold">
                     <ShieldCheck className="h-3 w-3" />
-                    Chaperone Active
+                    Chaperone
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             {!isMahram && (
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={handleToggleReveal}
-                className={`text-xs rounded-full transition-colors ${myConsent ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'text-slate-500'}`}
+                className={`text-xs rounded-full transition-colors px-2 sm:px-3 ${myConsent ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'text-slate-500'}`}
               >
-                {myConsent ? <Eye className="h-3 w-3 mr-2" /> : <EyeOff className="h-3 w-3 mr-2" />}
-                {myConsent ? 'Consent Given' : 'Unblur Photos'}
+                {myConsent ? <Eye className="h-3 w-3 sm:mr-2" /> : <EyeOff className="h-3 w-3 sm:mr-2" />}
+                <span className="hidden sm:inline">{myConsent ? 'Consent Given' : 'Unblur Photos'}</span>
               </Button>
             )}
             {isBothRevealed && (
-              <Badge className="bg-emerald-100 text-emerald-700 border-none text-[10px]">
-                Mutual Reveal Active
+              <Badge className="bg-emerald-100 text-emerald-700 border-none text-[10px] hidden sm:flex">
+                Mutual Reveal
               </Badge>
             )}
           </div>

@@ -59,11 +59,11 @@ export const ParentDashboard: React.FC = () => {
   if (loading) return <div className="p-8 text-center">Loading dashboard...</div>;
 
   return (
-    <div className="max-w-5xl mx-auto p-4 space-y-8">
-      <header className="flex justify-between items-end">
+    <div className="max-w-5xl mx-auto p-3 sm:p-4 space-y-6 sm:space-y-8">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-slate-900">Guardian Dashboard</h1>
-          <p className="text-slate-600">Review and vet potential matches for your family members.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Guardian Dashboard</h1>
+          <p className="text-sm text-slate-600">Review and vet potential matches for your family members.</p>
         </div>
         <Badge variant="secondary" className="bg-rose-100 text-rose-700 hover:bg-rose-100">
           <ShieldAlert className="h-4 w-4 mr-1" />
@@ -72,9 +72,9 @@ export const ParentDashboard: React.FC = () => {
       </header>
 
       <Tabs defaultValue="pending" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
-          <TabsTrigger value="pending">Pending Review ({pendingApprovals.length})</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="pending" className="text-xs sm:text-sm">Pending ({pendingApprovals.length})</TabsTrigger>
+          <TabsTrigger value="history" className="text-xs sm:text-sm">History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending" className="mt-6">
@@ -90,7 +90,7 @@ export const ParentDashboard: React.FC = () => {
               {pendingApprovals.map((conn) => (
                 <Card key={conn.id} className="overflow-hidden border-none shadow-md">
                   <div className="flex flex-col md:flex-row">
-                    <div className="p-6 flex-1 space-y-4">
+                    <div className="p-4 sm:p-6 flex-1 space-y-4">
                       <div className="flex items-center space-x-4">
                         <Avatar className="h-16 w-16 border-2 border-rose-100">
                           <AvatarImage src={conn.sender.photoUrl} />
@@ -136,7 +136,7 @@ export const ParentDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="bg-slate-100 p-6 flex flex-col justify-center space-y-3 md:w-48">
+                    <div className="bg-slate-100 p-4 sm:p-6 flex flex-row sm:flex-col justify-center items-stretch space-x-3 sm:space-x-0 sm:space-y-3 sm:w-48">
                       <Button 
                         onClick={() => handleApproval(conn.id, true)}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"

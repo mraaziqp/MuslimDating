@@ -86,18 +86,18 @@ export const SeekerFeed: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-8">
-      <header className="flex justify-between items-center">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-rose-500" />
+    <div className="max-w-4xl mx-auto p-3 sm:p-4 space-y-6 sm:space-y-8">
+      <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+        <div className="space-y-0.5">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2">
+            <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-rose-500 shrink-0" />
             Daily Curated Batch
           </h1>
-          <p className="text-slate-600">Intentional connections based on shared values and readiness.</p>
+          <p className="text-sm text-slate-600">Intentional connections based on shared values and readiness.</p>
         </div>
         {!dbUser?.isIntroCompleted && (
           <a href="/readiness">
-            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200 cursor-pointer">
+            <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200 cursor-pointer text-xs">
               Complete Readiness Hub to connect
             </Badge>
           </a>
@@ -110,7 +110,7 @@ export const SeekerFeed: React.FC = () => {
           <p className="text-slate-500">No new profiles in your batch today. Check back tomorrow!</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-12 max-w-2xl mx-auto">
+        <div className="flex flex-col gap-6 sm:gap-10 max-w-2xl mx-auto">
           {seekers.map((seeker, index) => (
             <motion.div
               key={seeker.id}
@@ -141,40 +141,40 @@ export const SeekerFeed: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-8 -mt-6 bg-white rounded-t-3xl relative z-10 space-y-8">
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-1">
-                      <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                <div className="p-4 sm:p-8 -mt-6 bg-white rounded-t-3xl relative z-10 space-y-5 sm:space-y-8">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="space-y-1 min-w-0">
+                      <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight truncate">
                         {seeker.displayName ?? 'Anonymous'}
                       </h3>
-                      <div className="flex items-center text-slate-400 gap-4 text-sm font-medium">
-                        {seeker.location && <span className="flex items-center"><MapPin className="h-4 w-4 mr-1.5" />{seeker.location}</span>}
-                        {seeker.profession && <span className="flex items-center"><Briefcase className="h-4 w-4 mr-1.5" />{seeker.profession}</span>}
+                      <div className="flex flex-wrap items-center text-slate-400 gap-2 sm:gap-4 text-xs sm:text-sm font-medium">
+                        {seeker.location && !(seeker as any).hiddenFields?.includes('location') && <span className="flex items-center"><MapPin className="h-3.5 w-3.5 mr-1" />{seeker.location}</span>}
+                        {seeker.profession && !(seeker as any).hiddenFields?.includes('profession') && <span className="flex items-center"><Briefcase className="h-3.5 w-3.5 mr-1" />{seeker.profession}</span>}
                       </div>
                     </div>
-                    {seeker.age && (
-                      <div className="text-right">
-                        <span className="text-4xl font-black text-rose-500/10 block leading-none">{seeker.age}</span>
+                    {seeker.age && !(seeker as any).hiddenFields?.includes('age') && (
+                      <div className="text-right shrink-0">
+                        <span className="text-3xl sm:text-4xl font-black text-rose-500/10 block leading-none">{seeker.age}</span>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Years Old</span>
                       </div>
                     )}
                   </div>
 
                   {/* Deen metrics */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100/50">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Clock className="h-4 w-4 text-rose-500" />
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div className="bg-slate-50/80 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100/50">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Clock className="h-3.5 w-3.5 text-rose-500" />
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prayer</span>
                       </div>
-                      <p className="text-sm font-bold text-slate-800">{seeker.prayerFrequency ?? 'Not specified'}</p>
+                      <p className="text-xs sm:text-sm font-bold text-slate-800">{(seeker as any).hiddenFields?.includes('prayerFrequency') ? 'Private' : (seeker.prayerFrequency ?? 'Not specified')}</p>
                     </div>
-                    <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100/50">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Utensils className="h-4 w-4 text-rose-500" />
+                    <div className="bg-slate-50/80 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100/50">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Utensils className="h-3.5 w-3.5 text-rose-500" />
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dietary</span>
                       </div>
-                      <p className="text-sm font-bold text-slate-800">{seeker.dietaryHabits ?? 'Not specified'}</p>
+                      <p className="text-xs sm:text-sm font-bold text-slate-800">{(seeker as any).hiddenFields?.includes('dietaryHabits') ? 'Private' : (seeker.dietaryHabits ?? 'Not specified')}</p>
                     </div>
                   </div>
 
@@ -202,11 +202,11 @@ export const SeekerFeed: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-6 border-t border-slate-100">
+                  <div className="pt-4 sm:pt-6 border-t border-slate-100">
                     <Button
                       onClick={() => handleConnect(seeker)}
                       disabled={!dbUser?.isIntroCompleted}
-                      className="w-full bg-rose-600 hover:bg-rose-700 text-white py-6 text-lg font-bold rounded-2xl disabled:opacity-40"
+                      className="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 sm:py-6 text-base sm:text-lg font-bold rounded-2xl disabled:opacity-40"
                     >
                       <Heart className="h-5 w-5 mr-2" />
                       {dbUser?.isIntroCompleted ? 'Send Connection Request' : 'Complete Readiness Hub First'}

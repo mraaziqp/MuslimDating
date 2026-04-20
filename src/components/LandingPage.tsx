@@ -8,9 +8,9 @@ export const LandingPage: React.FC = () => {
   return (
     <div className="bg-white">
       {/* Hero Section */}
-      <section className="relative py-20 overflow-hidden">
+      <section className="relative py-12 sm:py-20 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="text-center space-y-8">
+          <div className="text-center space-y-6 sm:space-y-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -24,9 +24,10 @@ export const LandingPage: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight"
+              className="text-4xl sm:text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight"
             >
-              Intentional Matchmaking <br />
+              Intentional Matchmaking{' '}
+              <br className="hidden sm:block" />
               <span className="text-rose-600">Rooted in Faith</span>
             </motion.h1>
 
@@ -34,7 +35,7 @@ export const LandingPage: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="text-xl text-slate-600 max-w-2xl mx-auto"
+              className="text-base sm:text-xl text-slate-600 max-w-2xl mx-auto px-2"
             >
               A platform that honors Islamic principles of modesty, privacy, and familial involvement. No swiping. Just intentional courtship.
             </motion.p>
@@ -43,16 +44,16 @@ export const LandingPage: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 px-4 sm:px-0"
             >
-              <Link to="/onboarding">
-                <Button size="lg" className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 text-lg rounded-full">
+              <Link to="/onboarding" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full bg-rose-600 hover:bg-rose-700 text-white px-8 py-5 sm:py-6 text-base sm:text-lg rounded-full">
                   Start Your Journey
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Link to="/readiness">
-                <Button size="lg" variant="outline" className="px-8 py-6 text-lg rounded-full border-slate-200">
+              <Link to="/readiness" className="w-full sm:w-auto">
+                <Button size="lg" variant="outline" className="w-full px-8 py-5 sm:py-6 text-base sm:text-lg rounded-full border-slate-200">
                   Explore Readiness Hub
                 </Button>
               </Link>
@@ -68,13 +69,13 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-24 bg-slate-50">
+      <section className="py-12 sm:py-24 bg-slate-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-slate-900">Why NikahPath is Different</h2>
+          <div className="text-center mb-10 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Why NikahPath is Different</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 md:gap-12">
             {[
               {
                 icon: <Users className="h-8 w-8 text-rose-600" />,
@@ -95,11 +96,11 @@ export const LandingPage: React.FC = () => {
               <motion.div 
                 key={i}
                 whileHover={{ y: -5 }}
-                className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100"
+                className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-100"
               >
                 <div className="mb-4">{feature.icon}</div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2">{feature.title}</h3>
-                <p className="text-slate-600">{feature.description}</p>
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">{feature.title}</h3>
+                <p className="text-slate-600 text-sm sm:text-base">{feature.description}</p>
               </motion.div>
             ))}
           </div>

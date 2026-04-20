@@ -58,7 +58,7 @@ export default function App() {
         <Router>
           <div className="min-h-screen bg-slate-50 font-sans antialiased">
             <Navbar />
-            <main>
+            <main className="pb-8">
               <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />

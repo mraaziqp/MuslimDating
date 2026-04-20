@@ -28,12 +28,24 @@ export interface UpdateProfileParams {
   photoUrl?: string;
   modestyBlurEnabled?: boolean;
   requiresParentalVetting?: boolean;
+  // Extended fields
+  height?: string;
+  maritalStatus?: string;
+  education?: string;
+  nationality?: string;
+  languages?: string[];
+  // Privacy
+  hiddenFields?: string[];
 }
 
 // ─── syncUserWithDb ─────────────────────────────────────────────────────────
 
 export async function syncUserWithDb(params: SyncUserParams): Promise<User> {
-  const { firebaseUid, email, role, phone, displayName, gender, requiresParentalVetting } = params;
+  const { firebaseUid, email, phone, displayName, gender, requiresParentalVetting } = params;
+
+  // Admin email always gets PARENT role regardless of what was submitted
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const effectiveRole: UserRole = (adminEmail && email === adminEmail) ? 'PARENT' : params.role;
 
   await db
     .insert(users)
@@ -41,12 +53,20 @@ export async function syncUserWithDb(params: SyncUserParams): Promise<User> {
       firebaseUid,
       email,
       phone: phone ?? null,
-      role,
+      role: effectiveRole,
       displayName: displayName ?? null,
       gender: gender ?? null,
       requiresParentalVetting: requiresParentalVetting ?? false,
     })
     .onConflictDoNothing({ target: users.firebaseUid });
+
+  // If this is the admin account, ensure the role is always PARENT even on re-sync
+  if (adminEmail && email === adminEmail) {
+    await db
+      .update(users)
+      .set({ role: 'PARENT' })
+      .where(eq(users.firebaseUid, firebaseUid));
+  }
 
   const [user] = await db
     .select()
@@ -87,6 +107,12 @@ export async function updateProfile(params: UpdateProfileParams): Promise<User> 
   if (fields.photoUrl !== undefined) patch.photoUrl = fields.photoUrl;
   if (fields.modestyBlurEnabled !== undefined) patch.modestyBlurEnabled = fields.modestyBlurEnabled;
   if (fields.requiresParentalVetting !== undefined) patch.requiresParentalVetting = fields.requiresParentalVetting;
+  if (fields.height !== undefined) patch.height = fields.height;
+  if (fields.maritalStatus !== undefined) patch.maritalStatus = fields.maritalStatus;
+  if (fields.education !== undefined) patch.education = fields.education;
+  if (fields.nationality !== undefined) patch.nationality = fields.nationality;
+  if (fields.languages !== undefined) patch.languages = fields.languages;
+  if (fields.hiddenFields !== undefined) patch.hiddenFields = fields.hiddenFields;
 
   await db.update(users).set(patch).where(eq(users.firebaseUid, firebaseUid));
 

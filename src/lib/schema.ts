@@ -61,6 +61,22 @@ export const users = pgTable("users", {
   bio: text("bio"),
   photoUrl: text("photo_url"),
 
+  // ── Extended profile fields ──────────────────────────────────────────────
+  height: text("height"),
+  maritalStatus: text("marital_status"),
+  education: text("education"),
+  nationality: text("nationality"),
+  languages: text("languages")
+    .array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
+
+  // ── Privacy: fields the user has chosen to hide from their profile card ──
+  hiddenFields: text("hidden_fields")
+    .array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
+
   // Readiness Hub progress
   isIntroCompleted: boolean("is_intro_completed").notNull().default(false),
   completedModules: text("completed_modules")

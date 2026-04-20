@@ -47,9 +47,9 @@ export const ChatList: React.FC = () => {
   if (loading) return <div className="p-8 text-center">Loading chats...</div>;
 
   return (
-    <div className="max-w-3xl mx-auto p-4 space-y-6">
+    <div className="max-w-3xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
       <header className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-900">Your Conversations</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Your Conversations</h1>
         <Badge variant="outline" className="text-slate-500">
           {chats.length} / 3 Active Limit
         </Badge>
