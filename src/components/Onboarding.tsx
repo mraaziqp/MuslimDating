@@ -100,12 +100,11 @@ export const Onboarding: React.FC = () => {
           }
           return;
         }
-        const err = await res.json();
         if (res.status === 401) {
           // Wrong password
           toast.error('Incorrect email or password.');
-        } else {
-          // 404-style: account not found — auto-switch to signup
+        } else if (res.status === 404) {
+          // Account not found — optionally guide into signup
           toast.info('No account found — creating one for you...');
           setAuthMode('signup');
           const regRes = await fetch('/api/auth/register', {
@@ -123,6 +122,9 @@ export const Onboarding: React.FC = () => {
             const msg = await readErrorMessage(regRes, 'Failed to create account.');
             toast.error(msg);
           }
+        } else {
+          const msg = await readErrorMessage(res, 'Failed to sign in.');
+          toast.error(msg);
         }
       } else {
         // Explicit signup
