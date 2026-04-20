@@ -41,6 +41,16 @@ export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
   const { syncUser, loginWithJwt, dbUser } = useAuth();
 
+  const fetchWithTimeout = async (input: RequestInfo | URL, init?: RequestInit, timeoutMs = 15000) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
   // Tracks whether this session was authenticated via JWT (email/password)
   const [isJwtSession, setIsJwtSession] = useState(false);
 
@@ -82,7 +92,7 @@ export const Onboarding: React.FC = () => {
     try {
       if (authMode === 'signin') {
         // Try login first
-        const res = await fetch('/api/auth/login', {
+        const res = await fetchWithTimeout('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: email.trim(), password }),
@@ -107,7 +117,7 @@ export const Onboarding: React.FC = () => {
           // Account not found — optionally guide into signup
           toast.info('No account found — creating one for you...');
           setAuthMode('signup');
-          const regRes = await fetch('/api/auth/register', {
+          const regRes = await fetchWithTimeout('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: email.trim(), password }),
@@ -129,7 +139,7 @@ export const Onboarding: React.FC = () => {
       } else {
         // Explicit signup
         if (password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
-        const res = await fetch('/api/auth/register', {
+        const res = await fetchWithTimeout('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: email.trim(), password }),
@@ -152,7 +162,11 @@ export const Onboarding: React.FC = () => {
       }
     } catch (error) {
       console.error('[handleEmailAuth] network/parsing failure', error);
-      toast.error('Request failed. Please try again.');
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        toast.error('Request timed out. Please try again.');
+      } else {
+        toast.error('Request failed. Please try again.');
+      }
     } finally {
       setAuthLoading(false);
     }
