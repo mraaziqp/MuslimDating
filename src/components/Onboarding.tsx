@@ -69,6 +69,16 @@ export const Onboarding: React.FC = () => {
     if (!email.trim() || !password) return;
     setAuthLoading(true);
 
+    const readErrorMessage = async (response: Response, fallback: string) => {
+      try {
+        const data = await response.json();
+        return data?.error ?? fallback;
+      } catch {
+        const text = await response.text().catch(() => '');
+        return text || fallback;
+      }
+    };
+
     try {
       if (authMode === 'signin') {
         // Try login first
@@ -110,8 +120,8 @@ export const Onboarding: React.FC = () => {
             setDisplayName(email.split('@')[0]);
             setStep(2);
           } else {
-            const regErr = await regRes.json();
-            toast.error(regErr.error ?? 'Failed to create account.');
+            const msg = await readErrorMessage(regRes, 'Failed to create account.');
+            toast.error(msg);
           }
         }
       } else {
@@ -129,17 +139,18 @@ export const Onboarding: React.FC = () => {
           setDisplayName(email.split('@')[0]);
           setStep(2);
         } else {
-          const err = await res.json();
           if (res.status === 409) {
             toast.error('Account already exists — sign in instead.');
             setAuthMode('signin');
           } else {
-            toast.error(err.error ?? 'Failed to create account.');
+            const msg = await readErrorMessage(res, 'Failed to create account.');
+            toast.error(msg);
           }
         }
       }
-    } catch {
-      toast.error('Network error. Please try again.');
+    } catch (error) {
+      console.error('[handleEmailAuth] network/parsing failure', error);
+      toast.error('Request failed. Please try again.');
     } finally {
       setAuthLoading(false);
     }

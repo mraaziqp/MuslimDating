@@ -21,6 +21,8 @@ const app = express();
 app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "nikahpath-dev-secret";
+let authSchemaEnsured = false;
+let authSchemaEnsuring: Promise<void> | null = null;
 
 // ─── GET /api/health ─────────────────────────────────────────────────────────
 // Quick env/db connectivity diagnostic — safe to hit from browser
@@ -52,6 +54,19 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   const message = (err as { message?: string })?.message ?? "Internal server error";
   return res.status(500).json({ error: message });
 });
+
+async function ensureAuthSchema(): Promise<void> {
+  if (authSchemaEnsured) return;
+  if (!authSchemaEnsuring) {
+    authSchemaEnsuring = (async () => {
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text`);
+      authSchemaEnsured = true;
+    })().finally(() => {
+      authSchemaEnsuring = null;
+    });
+  }
+  await authSchemaEnsuring;
+}
 
 function mapAuthRouteError(err: unknown): { status: number; message: string } {
   const e = err as { code?: string; message?: string };
@@ -92,6 +107,8 @@ function mapAuthRouteError(err: unknown): { status: number; message: string } {
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 app.post("/api/auth/register", async (req, res) => {
   try {
+    await ensureAuthSchema();
+
     const { email, password } = req.body as { email?: string; password?: string };
     if (!email || !password) return res.status(400).json({ error: "email and password are required." });
     if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
@@ -124,6 +141,8 @@ app.post("/api/auth/register", async (req, res) => {
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
 app.post("/api/auth/login", async (req, res) => {
   try {
+    await ensureAuthSchema();
+
     const { email, password } = req.body as { email?: string; password?: string };
     if (!email || !password) return res.status(400).json({ error: "email and password are required." });
 
