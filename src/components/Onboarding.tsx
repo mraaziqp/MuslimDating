@@ -92,14 +92,45 @@ export const Onboarding: React.FC = () => {
       }
     } catch (err: any) {
       const code = err?.code as string;
-      if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        toast.error("Invalid email or password");
+      if (authMode === 'signin' && (code === 'auth/user-not-found' || code === 'auth/invalid-credential')) {
+        // Account doesn't exist — automatically switch to Create Account and retry
+        setAuthMode('signup');
+        toast.info("No account found — creating a new account for you...");
+        setAuthLoading(true);
+        try {
+          if (password.length < 6) {
+            toast.error("Password must be at least 6 characters");
+            return;
+          }
+          const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
+          const defaultName = email.split('@')[0];
+          await updateProfile(result.user, { displayName: defaultName });
+          setDisplayName(defaultName);
+          setStep(2);
+          return;
+        } catch (createErr: any) {
+          const createCode = createErr?.code as string;
+          if (createCode === 'auth/email-already-in-use') {
+            toast.error("Account exists but password is incorrect. Please try again.");
+            setAuthMode('signin');
+          } else {
+            toast.error("Failed to create account. Please try again.");
+          }
+        } finally {
+          setAuthLoading(false);
+        }
+        return;
+      } else if (code === 'auth/wrong-password') {
+        toast.error("Incorrect password. Please try again.");
       } else if (code === 'auth/email-already-in-use') {
-        toast.error("An account with that email already exists — sign in instead");
+        toast.error("Account already exists — signing you in instead");
         setAuthMode('signin');
       } else if (code === 'auth/invalid-email') {
         toast.error("Please enter a valid email address");
+      } else if (code === 'auth/weak-password') {
+        toast.error("Password must be at least 6 characters");
       } else {
+        console.error("[handleEmailAuth]", code, err?.message);
         toast.error("Authentication failed. Please try again.");
       }
     } finally {
