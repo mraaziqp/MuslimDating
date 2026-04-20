@@ -22,45 +22,87 @@ app.use(express.json());
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "nikahpath-dev-secret";
 
+function mapAuthRouteError(err: unknown): { status: number; message: string } {
+  const e = err as { code?: string; message?: string };
+
+  // Postgres undefined column (very likely when production DB is missing password_hash migration)
+  if (e?.code === "42703") {
+    return {
+      status: 500,
+      message: "Database schema is out of date. Run migrations so users.password_hash exists.",
+    };
+  }
+
+  // Postgres undefined table / relation
+  if (e?.code === "42P01") {
+    return {
+      status: 500,
+      message: "Database schema is missing required tables. Run migrations on production database.",
+    };
+  }
+
+  // Common connection/config errors
+  if (e?.message?.includes("DATABASE_URL") || e?.message?.includes("ECONN") || e?.message?.includes("ENOTFOUND")) {
+    return {
+      status: 500,
+      message: "Database connection failed. Verify DATABASE_URL in deployment environment.",
+    };
+  }
+
+  return { status: 500, message: "Authentication service error." };
+}
+
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 app.post("/api/auth/register", async (req, res) => {
-  const { email, password } = req.body as { email?: string; password?: string };
-  if (!email || !password) return res.status(400).json({ error: "email and password are required." });
-  if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
+  try {
+    const { email, password } = req.body as { email?: string; password?: string };
+    if (!email || !password) return res.status(400).json({ error: "email and password are required." });
+    if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
 
-  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
-  if (existing.length > 0) return res.status(409).json({ error: "An account with that email already exists." });
+    const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+    if (existing.length > 0) return res.status(409).json({ error: "An account with that email already exists." });
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  const firebaseUid = `local:${randomUUID()}`;
-  const normalizedEmail = email.toLowerCase().trim();
-  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
-  const role: UserRole = adminEmail && normalizedEmail === adminEmail ? "PARENT" : "SOLO";
+    const passwordHash = await bcrypt.hash(password, 12);
+    const firebaseUid = `local:${randomUUID()}`;
+    const normalizedEmail = email.toLowerCase().trim();
+    const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+    const role: UserRole = adminEmail && normalizedEmail === adminEmail ? "PARENT" : "SOLO";
 
-  const [user] = await db.insert(users).values({
-    firebaseUid,
-    email: normalizedEmail,
-    passwordHash,
-    role,
-  }).returning();
+    const [user] = await db.insert(users).values({
+      firebaseUid,
+      email: normalizedEmail,
+      passwordHash,
+      role,
+    }).returning();
 
-  const token = jwt.sign({ uid: user.firebaseUid, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
-  return res.json({ token, user });
+    const token = jwt.sign({ uid: user.firebaseUid, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
+    return res.json({ token, user });
+  } catch (err) {
+    console.error("[POST /api/auth/register]", err);
+    const mapped = mapAuthRouteError(err);
+    return res.status(mapped.status).json({ error: mapped.message });
+  }
 });
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
 app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body as { email?: string; password?: string };
-  if (!email || !password) return res.status(400).json({ error: "email and password are required." });
+  try {
+    const { email, password } = req.body as { email?: string; password?: string };
+    if (!email || !password) return res.status(400).json({ error: "email and password are required." });
 
-  const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
-  if (!user || !user.passwordHash) return res.status(401).json({ error: "Invalid email or password." });
+    const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+    if (!user || !user.passwordHash) return res.status(401).json({ error: "Invalid email or password." });
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) return res.status(401).json({ error: "Invalid email or password." });
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return res.status(401).json({ error: "Invalid email or password." });
 
-  const token = jwt.sign({ uid: user.firebaseUid, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
-  return res.json({ token, user });
+    const token = jwt.sign({ uid: user.firebaseUid, email: user.email }, JWT_SECRET, { expiresIn: "30d" });
+    return res.json({ token, user });
+  } catch (err) {
+    console.error("[POST /api/auth/login]", err);
+    const mapped = mapAuthRouteError(err);
+    return res.status(mapped.status).json({ error: mapped.message });
+  }
 });
 
 // ─── GET /api/auth/me ────────────────────────────────────────────────────────
