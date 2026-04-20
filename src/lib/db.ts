@@ -11,6 +11,14 @@ const databaseUrl =
   process.env.DATABASE_URL ??
   "postgresql://invalid:invalid@localhost:5432/invalid?sslmode=require";
 
-const sql = neon(databaseUrl);
+let sql: ReturnType<typeof neon>;
+try {
+  sql = neon(databaseUrl);
+} catch (err) {
+  // Never crash the serverless function at import time due to malformed env vars.
+  // Routes can then return structured JSON errors instead of FUNCTION_INVOCATION_FAILED.
+  console.error("[db init] Failed to parse DATABASE_URL, using fallback placeholder", err);
+  sql = neon("postgresql://invalid:invalid@localhost:5432/invalid?sslmode=require");
+}
 
 export const db = drizzle(sql, { schema });
