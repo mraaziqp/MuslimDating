@@ -3,7 +3,11 @@ build/
 dist/
 coverage/
 .data/
+.vercel/
 .DS_Store
 *.log
 .env*
 !.env.example
+
+.vercel
+.env*.local
