@@ -220,7 +220,7 @@ export async function listUsers(db: Database, query: UserDirectoryQuery): Promis
   };
 }
 
-async function selectAdminRows(
+export async function selectAdminRows(
   db: Database,
   where: SQL | undefined,
   limit: number,
@@ -244,6 +244,7 @@ async function selectAdminRows(
   return rows.map(({ user, reportCount, activeChats, hasPhoto }) => ({
     id: user.id,
     email: user.email,
+    username: user.username,
     phone: user.phone,
     displayName: user.displayName,
     role: user.role,

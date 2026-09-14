@@ -30,7 +30,7 @@ export function AccountStatusBadge({ status }: { status: AccountStatus }) {
   );
 }
 
-export function UserDirectory() {
+export function UserDirectory({ onViewUser }: { onViewUser: (userId: string) => void }) {
   const [search, setSearch] = useState("");
   const q = useDebouncedValue(search.trim(), 300);
   const [role, setRole] = useState<UserRole | null>(null);
@@ -57,7 +57,7 @@ export function UserDirectory() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, email or phone"
+            placeholder="Search name, username, email or phone"
             className="h-9 pl-8"
             aria-label="Search users"
           />
@@ -92,7 +92,7 @@ export function UserDirectory() {
       ) : (
         <>
           <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[880px] text-left text-sm">
               <thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
                 <tr>
                   <th className="px-3 py-2 font-medium">Member</th>
@@ -109,14 +109,17 @@ export function UserDirectory() {
                 {users.data.items.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/60">
                     <td className="px-3 py-2.5">
-                      <p className="flex items-center gap-1 font-medium text-slate-900">
-                        {u.displayName ?? <span className="text-slate-400 italic">No name</span>}
-                        {u.readinessCompleted && <ShieldCheck className="size-3.5 text-emerald-500" aria-label="Readiness certified" />}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {u.email}
-                        {u.phone && ` · ${u.phone}`}
-                      </p>
+                      <button type="button" onClick={() => onViewUser(u.id)} className="text-left hover:underline">
+                        <span className="flex items-center gap-1 font-medium text-slate-900">
+                          {u.displayName ?? <span className="text-slate-400 italic">No name</span>}
+                          {u.readinessCompleted && <ShieldCheck className="size-3.5 text-emerald-500" aria-label="Readiness certified" />}
+                        </span>
+                        <span className="block text-xs text-slate-500">
+                          {u.username && <span className="font-mono">@{u.username} · </span>}
+                          {u.email}
+                          {u.phone && ` · ${u.phone}`}
+                        </span>
+                      </button>
                     </td>
                     <td className="px-3 py-2.5 text-slate-600">{ROLE_LABELS[u.role]}</td>
                     <td className="px-3 py-2.5">
@@ -128,7 +131,10 @@ export function UserDirectory() {
                     <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums">{u.activeChats}</td>
                     <td className="px-3 py-2.5 text-xs text-slate-500">{new Date(u.createdAt).toLocaleDateString()}</td>
                     <td className="px-3 py-2.5 text-xs text-slate-500">{u.lastSeenAt ? timeAgo(u.lastSeenAt) : "—"}</td>
-                    <td className="px-3 py-2.5 text-right">
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="sm" onClick={() => onViewUser(u.id)}>
+                        View
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => setManaging(u)}>
                         Manage
                       </Button>

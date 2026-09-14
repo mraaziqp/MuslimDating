@@ -293,6 +293,14 @@ export const MIGRATIONS: Migration[] = [
       "CREATE TRIGGER trg_connections_approval_rules BEFORE INSERT OR UPDATE OF status ON connections FOR EACH ROW EXECUTE FUNCTION enforce_connection_approval_rules();",
     ],
   },
+  {
+    id: "0002_usernames",
+    statements: [
+      addColumn("users", "username text"),
+      "UPDATE users SET username = lower(username) WHERE username IS NOT NULL AND username <> lower(username);",
+      addConstraint("users", "users_username_unique", "UNIQUE (username)"),
+    ],
+  },
 ];
 
 /**

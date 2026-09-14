@@ -1,5 +1,9 @@
 import type {
   AccountActionInput,
+  AdminConnectionRow,
+  AdminConnectionsQuery,
+  AdminTranscript,
+  AdminUserDetail,
   AdminUserRow,
   ApiErrorBody,
   AssignRoleInput,
@@ -184,10 +188,14 @@ export const api = {
     moderation: () => request<ModerationQueue>("GET", "/api/admin/moderation"),
     users: (query: Partial<UserDirectoryQuery>) =>
       request<Paginated<AdminUserRow>>("GET", `/api/admin/users${queryString({ ...query })}`),
+    userDetail: (id: string) => request<AdminUserDetail>("GET", `/api/admin/users/${id}`),
     setStatus: (id: string, input: AccountActionInput) =>
       request<AdminUserRow>("POST", `/api/admin/users/${id}/status`, input),
     assignRole: (id: string, input: AssignRoleInput) => request<AdminUserRow>("POST", `/api/admin/users/${id}/role`, input),
     removePhoto: (id: string, reason: string) => request<AdminUserRow>("DELETE", `/api/admin/users/${id}/photo`, { reason }),
+    connections: (query: Partial<AdminConnectionsQuery>) =>
+      request<Paginated<AdminConnectionRow>>("GET", `/api/admin/connections${queryString({ ...query })}`),
+    transcript: (id: string) => request<AdminTranscript>("GET", `/api/admin/connections/${id}/transcript`),
     updateReport: (id: string, input: ReportUpdateInput) =>
       request<{ id: string }>("PATCH", `/api/admin/reports/${id}`, input),
     auditLogs: (query: Partial<AuditQuery>) =>

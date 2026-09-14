@@ -47,6 +47,8 @@ export const users = pgTable(
     /** Firebase UID for Google users, `local:<uuid>` for email/password users. */
     firebaseUid: text("firebase_uid").notNull().unique(),
     email: text("email").notNull().unique(),
+    /** Optional lowercase login handle (used by administrator accounts). */
+    username: text("username").unique(),
     /** bcrypt hash; null for Google-only accounts. Never leaves the server. */
     passwordHash: text("password_hash"),
     phone: text("phone"),

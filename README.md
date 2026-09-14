@@ -83,10 +83,27 @@ any pending stage ── declined ──► REJECTED        APPROVED ── ende
 ## Admin
 
 `/admin` is protected by `AdminProtectedRoute` (server re-validation of the session and role) and every
-`/api/admin/*` endpoint checks `role = 'ADMIN'` from the database. It provides live metrics, a user directory
-(search, role/status filters, suspend / ban / reinstate / reset role / assign role / remove photo), the
-moderation queue (reports + automatically flagged unusual activity), and the audit trail. `audit_logs` is
-append-only: a trigger rejects `UPDATE` and `DELETE`.
+`/api/admin/*` endpoint checks `role = 'ADMIN'` from the database. Administrators see everything:
+
+* **Overview** — live metrics and charts, plus a manual run of the inactivity cleaner.
+* **Users** — search by name, username, email or phone; filter by role/status; open any member's complete
+  record (all profile fields including hidden ones, photo, family links, connections, reports, activity);
+  suspend / ban / reinstate / reset role / assign role / remove photo.
+* **Connections** — every connection in every state, with message counts and full conversation transcripts.
+  Each transcript view is recorded in the audit trail (`ADMIN_VIEWED_CONVERSATION`).
+* **Moderation** — reports and automatically flagged unusual activity.
+* **Audit trail** — live, filterable, append-only (a trigger rejects `UPDATE` and `DELETE`).
+
+### Signing in as the administrator (username + password)
+
+Admins can sign in with a **username** instead of an email. Two ways to create one:
+
+* **Deployment environment (recommended for Vercel):** set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in the
+  project's environment variables. The account is created the first time you sign in with that username.
+* **CLI:** `DATABASE_URL=… npm run create-admin -- <username>` with `ADMIN_PASSWORD` set in the shell
+  (re-running resets the password).
+
+Never commit the admin password. Sign-in is rate limited (10 attempts per username per 15 minutes).
 
 ## Project layout
 

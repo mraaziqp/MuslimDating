@@ -71,7 +71,7 @@ describe("HTTP API security boundary", () => {
 
     const badLogin = await call("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: "sister@test.local", password: "wrong-password" }),
+      body: JSON.stringify({ identifier: "sister@test.local", password: "wrong-password" }),
     });
     expect(badLogin.status).toBe(401);
   });

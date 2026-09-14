@@ -41,6 +41,10 @@ in Google Cloud to your domains.
 
 ## Outstanding recommendations
 
+0. **Use a strong administrator password.** The admin account can read every member's private data and
+   conversations. A short numeric password is guessable despite rate limiting; use 16+ random characters and
+   rotate it with `npm run create-admin`. Transcript access is audited, but a stolen admin session is still
+   a full data breach.
 1. **Password reset and email verification** for email/password accounts (needs an email provider).
 2. **Content Security Policy `script-src`** — only framing/object restrictions are enforced today, to avoid
    breaking Firebase sign-in; add a full CSP after testing on the production domain.

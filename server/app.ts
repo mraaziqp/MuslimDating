@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import {
   accountActionSchema,
+  adminConnectionsQuerySchema,
   assignRoleSchema,
   auditQuerySchema,
   connectionDecisionSchema,
@@ -25,6 +26,7 @@ import {
   type AuthResponse,
 } from "../src/lib/contracts.js";
 import * as admin from "./actions/admin.js";
+import { getConversationTranscript, getUserDetail, listAllConnections } from "./actions/admin-oversight.js";
 import { getChat, sendMessage } from "./actions/chat.js";
 import { cleanupStaleConnections } from "./actions/cron.js";
 import { createInvite, getFamilyOverview, redeemInvite, removeLink, revokeInvite } from "./actions/family.js";
@@ -307,6 +309,12 @@ export function createApp(): express.Express {
     route(async (req) => admin.listUsers(await getDb(), parseInput(userDirectoryQuerySchema, req.query))),
   );
 
+  app.get(
+    "/api/admin/users/:id",
+    ...adminOnly,
+    route(async (req) => getUserDetail(await getDb(), uuidParam(req.params.id))),
+  );
+
   app.post(
     "/api/admin/users/:id/status",
     ...adminOnly,
@@ -334,6 +342,18 @@ export function createApp(): express.Express {
         parseInput(removePhotoSchema, req.body).reason,
       ),
     ),
+  );
+
+  app.get(
+    "/api/admin/connections",
+    ...adminOnly,
+    route(async (req) => listAllConnections(await getDb(), parseInput(adminConnectionsQuerySchema, req.query))),
+  );
+
+  app.get(
+    "/api/admin/connections/:id/transcript",
+    ...adminOnly,
+    route(async (req) => getConversationTranscript(await getDb(), actor(req), uuidParam(req.params.id))),
   );
 
   app.patch(

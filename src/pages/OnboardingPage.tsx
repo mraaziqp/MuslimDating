@@ -117,15 +117,17 @@ function AuthCard() {
 
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{mode === "signin" ? "Email or username" : "Email"}</Label>
             <Input
               id="email"
-              type="email"
-              autoComplete="email"
+              type={mode === "signin" ? "text" : "email"}
+              autoComplete={mode === "signin" ? "username" : "email"}
+              autoCapitalize="none"
+              spellCheck={false}
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={mode === "signin" ? "you@example.com or username" : "you@example.com"}
             />
           </div>
           <div className="space-y-1.5">

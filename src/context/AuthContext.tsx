@@ -96,8 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [handleAuthError]);
 
-  const loginWithPassword = useCallback(async (email: string, password: string) => {
-    const { token, user: fresh } = await api.login({ email, password });
+  const loginWithPassword = useCallback(async (identifier: string, password: string) => {
+    const { token, user: fresh } = await api.login({ identifier, password });
     if (auth.currentUser) await signOut(auth);
     writeSession(token);
     setBlockedMessage(null);

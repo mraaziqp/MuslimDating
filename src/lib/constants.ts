@@ -79,8 +79,17 @@ export const AUDIT_ACTIONS = [
   "ROLE_RESET",
   "ROLE_ASSIGNED",
   "PHOTO_REMOVED",
+  "ADMIN_VIEWED_CONVERSATION",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+export const CONNECTION_STATUSES = [
+  "PENDING_MALE_PARENT",
+  "PENDING_FEMALE_PARENT",
+  "APPROVED",
+  "REJECTED",
+  "TERMINATED",
+] as const;
 
 /** Narrows a free string (e.g. a <select> value) to one of the allowed options. */
 export function oneOf<T extends string>(options: readonly T[], value: string): T | null {

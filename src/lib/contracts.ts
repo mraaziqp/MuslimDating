@@ -20,6 +20,7 @@ export * from "./constants.js";
 import {
   ACCOUNT_STATUSES,
   ALL_ROLES,
+  CONNECTION_STATUSES,
   DIETARY_HABITS,
   EDUCATION_LEVELS,
   MARITAL_STATUSES,
@@ -41,8 +42,9 @@ export const registerSchema = z.object({
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+/** `identifier` is an email address or a username. */
 export const loginSchema = z.object({
-  email: z.email().max(254),
+  identifier: z.string().trim().min(3, "Enter your email or username.").max(254),
   password: z.string().min(1).max(128),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -149,6 +151,15 @@ export const userDirectoryQuerySchema = z.object({
 });
 export type UserDirectoryQuery = z.infer<typeof userDirectoryQuerySchema>;
 
+export const adminConnectionsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(5).max(100).default(25),
+  status: z.enum(CONNECTION_STATUSES).optional(),
+  userId: z.uuid().optional(),
+  q: z.string().trim().max(120).optional(),
+});
+export type AdminConnectionsQuery = z.infer<typeof adminConnectionsQuerySchema>;
+
 export const reportUpdateSchema = z.object({
   status: z.enum(["REVIEWED", "RESOLVED"]),
   note: optionalText(500),
@@ -179,6 +190,7 @@ export interface ApiErrorBody {
 export interface SelfUser {
   id: string;
   email: string;
+  username: string | null;
   phone: string | null;
   role: UserRole;
   accountStatus: AccountStatus;
@@ -330,6 +342,8 @@ export interface ReadinessResult {
 
 // ─── Admin DTOs ───────────────────────────────────────────────────────────────
 
+export type AdminPerson = PersonBrief & { email: string };
+
 export interface SystemMetrics {
   usersByRole: Record<UserRole, number>;
   usersByStatus: Record<AccountStatus, number>;
@@ -347,6 +361,7 @@ export interface SystemMetrics {
 export interface AdminUserRow {
   id: string;
   email: string;
+  username: string | null;
   phone: string | null;
   displayName: string | null;
   role: UserRole;
@@ -370,8 +385,8 @@ export interface Paginated<T> {
 
 export interface ReportRow {
   id: string;
-  reporter: PersonBrief & { email: string };
-  reported: PersonBrief & { email: string; accountStatus: AccountStatus };
+  reporter: AdminPerson;
+  reported: AdminPerson & { accountStatus: AccountStatus };
   reason: string;
   status: ReportStatus;
   resolutionNote: string | null;
@@ -379,7 +394,7 @@ export interface ReportRow {
 }
 
 export interface FlaggedUser {
-  user: PersonBrief & { email: string; accountStatus: AccountStatus };
+  user: AdminPerson & { accountStatus: AccountStatus };
   signals: string[];
 }
 
@@ -391,8 +406,56 @@ export interface ModerationQueue {
 export interface AuditLogView {
   id: string;
   action: string;
-  actor: (PersonBrief & { email: string }) | null;
-  target: (PersonBrief & { email: string }) | null;
+  actor: AdminPerson | null;
+  target: AdminPerson | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+
+export interface AdminConnectionRow {
+  id: string;
+  status: ConnectionStatus;
+  sender: AdminPerson;
+  receiver: AdminPerson;
+  mahram: AdminPerson | null;
+  messageCount: number;
+  senderPhotoConsent: boolean;
+  receiverPhotoConsent: boolean;
+  closedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+}
+
+export interface AdminFamilyLink {
+  linkId: string;
+  kind: LinkKind;
+  /** GUARDIAN: the person is this user's wali/mahram. WARD: this user looks after the person. */
+  relation: "GUARDIAN" | "WARD";
+  person: AdminPerson;
+  createdAt: string;
+}
+
+export interface AdminUserDetail {
+  account: AdminUserRow;
+  profile: SelfUser;
+  family: AdminFamilyLink[];
+  connections: AdminConnectionRow[];
+  reportsAgainst: ReportRow[];
+  reportsFiled: number;
+  recentActivity: AuditLogView[];
+}
+
+export interface AdminTranscriptMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderRole: "SENDER" | "RECEIVER" | "MAHRAM" | "OTHER";
+  text: string;
+  createdAt: string;
+}
+
+export interface AdminTranscript {
+  connection: AdminConnectionRow;
+  messages: AdminTranscriptMessage[];
 }

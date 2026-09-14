@@ -18,6 +18,7 @@ export function toSelfUser(user: User, hasPhoto: boolean): SelfUser {
   return {
     id: user.id,
     email: user.email,
+    username: user.username,
     phone: user.phone,
     role: user.role,
     accountStatus: user.accountStatus,

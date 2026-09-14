@@ -65,12 +65,55 @@ export async function registerWithPassword(db: Database, input: RegisterInput, i
   return created;
 }
 
-export async function loginWithPassword(db: Database, input: LoginInput, ip: string): Promise<User> {
-  const email = normaliseEmail(input.email);
-  await enforceRateLimit(db, `login:ip:${ip}`, 30, 900, "Too many sign-in attempts. Try again in 15 minutes.");
-  await enforceRateLimit(db, `login:email:${email}`, 10, 900, "Too many sign-in attempts. Try again in 15 minutes.");
+/**
+ * Creates the administrator named by ADMIN_USERNAME / ADMIN_PASSWORD the first
+ * time someone signs in with that username. The password lives only in the
+ * deployment environment, never in the repository. Existing accounts are left
+ * untouched (use `npm run create-admin` to reset a password).
+ */
+async function ensureEnvAdmin(db: Database, identifier: string): Promise<void> {
+  const username = process.env.ADMIN_USERNAME?.trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD;
+  if (!username || !password || identifier !== username) return;
 
-  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+  if (existing) return;
+
+  const [created] = await db
+    .insert(users)
+    .values({
+      firebaseUid: `local:${randomUUID()}`,
+      email: `${username}@admin.nikahpath.local`,
+      username,
+      passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS),
+      role: "ADMIN",
+      onboardingCompleted: true,
+      displayName: username,
+    })
+    .onConflictDoNothing()
+    .returning({ id: users.id });
+  if (created) {
+    await recordAudit(db, {
+      actorId: null,
+      targetId: created.id,
+      action: "ADMIN_BOOTSTRAPPED",
+      metadata: { source: "ADMIN_USERNAME", username },
+    });
+  }
+}
+
+/** Signs in with an email address or a username. */
+export async function loginWithPassword(db: Database, input: LoginInput, ip: string): Promise<User> {
+  const identifier = normaliseEmail(input.identifier);
+  await enforceRateLimit(db, `login:ip:${ip}`, 30, 900, "Too many sign-in attempts. Try again in 15 minutes.");
+  await enforceRateLimit(db, `login:id:${identifier}`, 10, 900, "Too many sign-in attempts. Try again in 15 minutes.");
+  await ensureEnvAdmin(db, identifier);
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(identifier.includes("@") ? eq(users.email, identifier) : eq(users.username, identifier))
+    .limit(1);
   // Always run bcrypt so response time does not reveal whether the email exists.
   dummyHash ??= await bcrypt.hash(randomUUID(), BCRYPT_ROUNDS);
   const valid = await bcrypt.compare(input.password, user?.passwordHash ?? dummyHash);

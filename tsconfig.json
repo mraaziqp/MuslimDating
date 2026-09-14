@@ -21,5 +21,5 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src", "server", "api", "scripts", "tests", "vite.config.ts", "vitest.config.ts", "drizzle.config.ts"]
+  "include": ["src", "server", "api", "scripts", "tests", "vite.config.ts", "vitest.config.ts"]
 }
