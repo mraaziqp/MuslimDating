@@ -1,175 +1,175 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { auth } from "../lib/firebase";
-import type { User as DbUser, UserRole } from "../lib/schema";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { api, ApiError, configureApiAuth } from "../lib/api";
+import type { SelfUser } from "../lib/contracts";
+import { auth, googleProvider } from "../lib/firebase";
 
-const JWT_KEY = "nikahpath_jwt";
+const SESSION_KEY = "nikahpath_session";
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+type AuthStatus = "loading" | "authenticated" | "anonymous";
 
-export interface SyncOptions {
-  phone?: string;
-  displayName?: string;
-  gender?: string;
-  age?: number;
-  location?: string;
-  requiresParentalVetting?: boolean;
+export interface AuthContextValue {
+  status: AuthStatus;
+  user: SelfUser | null;
+  /** Shown when the server reports the account as banned or suspended. */
+  blockedMessage: string | null;
+  loginWithPassword: (email: string, password: string) => Promise<SelfUser>;
+  registerWithPassword: (email: string, password: string) => Promise<SelfUser>;
+  signInWithGoogle: () => Promise<SelfUser>;
+  logout: () => Promise<void>;
+  /** Re-validates the session with the server and returns the fresh user. */
+  refresh: () => Promise<SelfUser | null>;
+  setUser: (user: SelfUser) => void;
+  dismissBlocked: () => void;
 }
 
-export type ProfileCompat = DbUser & {
-  uid: string;
-  displayName?: string;
-  gender?: string;
-  isIntroCompleted?: boolean;
-  photoUrl?: string;
-  completedModules?: string[];
-};
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-export interface AuthContextType {
-  firebaseUser: FirebaseUser | null;
-  dbUser: DbUser | null;
-  setDbUser: React.Dispatch<React.SetStateAction<DbUser | null>>;
-  loading: boolean;
-  /** The stable UID — use this everywhere instead of firebaseUser.uid */
-  currentUid: string | null;
-  syncUser: (role: UserRole, options?: SyncOptions) => Promise<DbUser | null>;
-  /** Call after a successful /api/auth/login or /api/auth/register response */
-  loginWithJwt: (token: string, user: DbUser) => void;
-  logout: () => void;
-  user: FirebaseUser | null;
-  profile: ProfileCompat | null;
+function readSession(): string | null {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null;
+  }
 }
 
-const AuthContext = createContext<AuthContextType>({
-  firebaseUser: null,
-  dbUser: null,
-  setDbUser: () => {},
-  loading: true,
-  currentUid: null,
-  syncUser: async () => null,
-  loginWithJwt: () => {},
-  logout: () => {},
-  user: null,
-  profile: null,
-});
+function writeSession(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(SESSION_KEY, token);
+    else localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Storage unavailable (private mode); the session lasts for this tab only.
+  }
+}
 
-export const useAuth = () => useContext(AuthContext);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const [user, setUserState] = useState<SelfUser | null>(null);
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
 
-// ─── Provider ──────────────────────────────────────────────────────────────
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [dbUser, setDbUser] = useState<DbUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // On mount, check for a stored JWT (email/password users)
-  useEffect(() => {
-    const token = localStorage.getItem(JWT_KEY);
-    if (token) {
-      fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : null)
-        .then(user => { if (user) setDbUser(user); })
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
-    // Firebase listener handles the rest (Google OAuth users)
+  const clearSession = useCallback(async () => {
+    writeSession(null);
+    if (auth.currentUser) await signOut(auth).catch(() => undefined);
+    setUserState(null);
+    setStatus("anonymous");
   }, []);
 
-  // Firebase auth state — for Google OAuth users
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      setFirebaseUser(fbUser);
-
-      if (!fbUser) {
-        // Only set loading=false if no JWT session is active
-        if (!localStorage.getItem(JWT_KEY)) setLoading(false);
-        return;
+  const handleAuthError = useCallback(
+    async (err: unknown) => {
+      if (err instanceof ApiError && (err.code === "ACCOUNT_BANNED" || err.code === "ACCOUNT_SUSPENDED")) {
+        setBlockedMessage(err.message);
       }
+      await clearSession();
+    },
+    [clearSession],
+  );
 
+  useEffect(() => {
+    configureApiAuth(
+      async () => (auth.currentUser ? auth.currentUser.getIdToken() : readSession()),
+      (error) => void handleAuthError(error),
+    );
+
+    return onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        const res = await fetch(`/api/users/me?firebaseUid=${encodeURIComponent(fbUser.uid)}`);
-        if (res.ok) setDbUser(await res.json());
-        else setDbUser(null);
-      } catch {
-        setDbUser(null);
-      } finally {
-        setLoading(false);
+        if (firebaseUser) {
+          writeSession(null);
+          const fresh = await api.firebaseSignIn(await firebaseUser.getIdToken());
+          setUserState(fresh);
+          setStatus("authenticated");
+        } else if (readSession()) {
+          setUserState(await api.me());
+          setStatus("authenticated");
+        } else {
+          setUserState(null);
+          setStatus("anonymous");
+        }
+      } catch (err) {
+        if (err instanceof ApiError && err.status > 0 && err.status < 500) {
+          await handleAuthError(err);
+        } else {
+          // Network/server outage: keep the stored session so a reload can recover.
+          setUserState(null);
+          setStatus("anonymous");
+        }
       }
     });
-    return unsubscribe;
+  }, [handleAuthError]);
+
+  const loginWithPassword = useCallback(async (email: string, password: string) => {
+    const { token, user: fresh } = await api.login({ email, password });
+    if (auth.currentUser) await signOut(auth);
+    writeSession(token);
+    setBlockedMessage(null);
+    setUserState(fresh);
+    setStatus("authenticated");
+    return fresh;
   }, []);
 
-  const loginWithJwt = (token: string, user: DbUser) => {
-    localStorage.setItem(JWT_KEY, token);
-    setDbUser(user);
-  };
+  const registerWithPassword = useCallback(async (email: string, password: string) => {
+    const { token, user: fresh } = await api.register({ email, password });
+    if (auth.currentUser) await signOut(auth);
+    writeSession(token);
+    setUserState(fresh);
+    setStatus("authenticated");
+    return fresh;
+  }, []);
 
-  const logout = async () => {
-    localStorage.removeItem(JWT_KEY);
-    setDbUser(null);
-    if (firebaseUser) {
-      await auth.signOut();
-      setFirebaseUser(null);
-    }
-  };
-
-  /** Syncs a Google OAuth user into Neon after onboarding */
-  const syncUser = async (role: UserRole, options?: SyncOptions): Promise<DbUser | null> => {
-    const currentUser = auth.currentUser ?? firebaseUser;
-    if (!currentUser) return null;
-    const email = currentUser.email;
-    if (!email) return null;
-
+  const signInWithGoogle = useCallback(async () => {
+    const credential = await signInWithPopup(auth, googleProvider);
+    writeSession(null);
     try {
-      const res = await fetch("/api/users/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firebaseUid: currentUser.uid,
-          email,
-          role,
-          phone: options?.phone,
-          displayName: options?.displayName,
-          gender: options?.gender,
-          age: options?.age,
-          location: options?.location,
-          requiresParentalVetting: options?.requiresParentalVetting ?? false,
-        }),
-      });
-      if (!res.ok) {
-        console.error("[syncUser] error", res.status, await res.text().catch(() => ""));
-        return null;
-      }
-      const user: DbUser = await res.json();
-      setDbUser(user);
-      return user;
+      const fresh = await api.firebaseSignIn(await credential.user.getIdToken());
+      setBlockedMessage(null);
+      setUserState(fresh);
+      setStatus("authenticated");
+      return fresh;
     } catch (err) {
-      console.error("[syncUser] fetch failed", err);
+      await signOut(auth).catch(() => undefined);
+      throw err;
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    try {
+      const fresh = await api.me();
+      setUserState(fresh);
+      setStatus("authenticated");
+      return fresh;
+    } catch (err) {
+      if (err instanceof ApiError && err.status > 0 && err.status < 500) await handleAuthError(err);
       return null;
     }
-  };
+  }, [handleAuthError]);
 
-  // The stable UID to use in all API calls
-  const currentUid = dbUser?.firebaseUid ?? firebaseUser?.uid ?? null;
-
-  const profile: ProfileCompat | null =
-    dbUser ? { ...dbUser, uid: currentUid ?? "" } : null;
-
-  return (
-    <AuthContext.Provider value={{
-      firebaseUser,
-      dbUser,
-      setDbUser,
-      loading,
-      currentUid,
-      syncUser,
-      loginWithJwt,
-      logout,
-      user: firebaseUser,
-      profile,
-    }}>
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      status,
+      user,
+      blockedMessage,
+      loginWithPassword,
+      registerWithPassword,
+      signInWithGoogle,
+      logout: clearSession,
+      refresh,
+      setUser: setUserState,
+      dismissBlocked: () => setBlockedMessage(null),
+    }),
+    [status, user, blockedMessage, loginWithPassword, registerWithPassword, signInWithGoogle, clearSession, refresh],
   );
-};
 
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+  return ctx;
+}
+
+/** For components rendered only inside authenticated routes. */
+export function useCurrentUser(): SelfUser {
+  const { user } = useAuth();
+  if (!user) throw new Error("useCurrentUser requires an authenticated route");
+  return user;
+}

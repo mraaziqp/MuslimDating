@@ -1,40 +1,40 @@
 /**
- * One-time script: promote a user to PARENT (admin) role by email.
- * Usage: npx tsx scripts/make-admin.ts <email>
- * Example: npx tsx scripts/make-admin.ts mraaziqp@gmail.com
+ * Promotes an existing account to ADMIN and records it in the audit log.
+ * Usage: npm run make-admin -- <email>
  */
-import 'dotenv/config';
-import { neon } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { eq } from 'drizzle-orm';
-import * as schema from '../src/lib/schema';
+import "dotenv/config";
+import { eq } from "drizzle-orm";
+import { users } from "../src/lib/schema.js";
+import { recordAudit } from "../server/audit.js";
+import { createDatabase } from "../server/db.js";
 
-const email = process.argv[2];
-
+const email = process.argv[2]?.trim().toLowerCase();
 if (!email) {
-  console.error('Usage: npx tsx scripts/make-admin.ts <email>');
+  console.error("Usage: npm run make-admin -- <email>");
   process.exit(1);
 }
 
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL is not set in .env');
-  process.exit(1);
+const handle = await createDatabase();
+try {
+  const [user] = await handle.db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (!user) {
+    console.error(`No account found for "${email}". The user must sign up in the app first.`);
+    process.exitCode = 1;
+  } else if (user.role === "ADMIN") {
+    console.log(`${email} is already an ADMIN.`);
+  } else {
+    await handle.db
+      .update(users)
+      .set({ role: "ADMIN", onboardingCompleted: true, updatedAt: new Date() })
+      .where(eq(users.id, user.id));
+    await recordAudit(handle.db, {
+      actorId: null,
+      targetId: user.id,
+      action: "ROLE_ASSIGNED",
+      metadata: { previousRole: user.role, newRole: "ADMIN", source: "cli:make-admin" },
+    });
+    console.log(`✓ ${email} is now an ADMIN (was ${user.role}).`);
+  }
+} finally {
+  await handle.close();
 }
-
-const sql = neon(process.env.DATABASE_URL);
-const db = drizzle(sql, { schema });
-
-const result = await db
-  .update(schema.users)
-  .set({ role: 'PARENT' })
-  .where(eq(schema.users.email, email))
-  .returning({ id: schema.users.id, email: schema.users.email, role: schema.users.role });
-
-if (result.length === 0) {
-  console.log(`No user found with email "${email}".`);
-  console.log('Make sure this account has signed in at least once through the app first.');
-} else {
-  console.log(`✓ ${result[0].email} is now PARENT (admin) role.`);
-}
-
-process.exit(0);
