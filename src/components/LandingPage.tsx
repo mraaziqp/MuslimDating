@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, ShieldCheck, Users, Lock, BookOpen, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Users, Lock, BookOpen, ArrowRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { motion } from 'motion/react';
 

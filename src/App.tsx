@@ -1,110 +1,147 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './components/AuthProvider';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { Navbar } from './components/Navbar';
-import { LandingPage } from './components/LandingPage';
-import { Onboarding } from './components/Onboarding';
-import { Toaster } from './components/ui/sonner';
-import type { UserRole } from './lib/schema';
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { X } from "lucide-react";
+import { ErrorBoundary } from "./components/shared/ErrorBoundary";
+import { LandingPage } from "./components/LandingPage";
+import { Navbar } from "./components/layout/Navbar";
+import { AdminProtectedRoute } from "./components/routing/AdminProtectedRoute";
+import { RequireAuth, RequireRole } from "./components/routing/RouteGuards";
+import { PageLoader } from "./components/shared/PageState";
+import { Toaster } from "./components/ui/sonner";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
-const SeekerFeed = lazy(() => import('./components/SeekerFeed').then((m) => ({ default: m.SeekerFeed })));
-const ParentDashboard = lazy(() => import('./components/ParentDashboard').then((m) => ({ default: m.ParentDashboard })));
-const ReadinessHub = lazy(() => import('./components/ReadinessHub').then((m) => ({ default: m.ReadinessHub })));
-const ChatList = lazy(() => import('./components/ChatList').then((m) => ({ default: m.ChatList })));
-const ChatRoom = lazy(() => import('./components/ChatRoom').then((m) => ({ default: m.ChatRoom })));
-const ProfilePage = lazy(() => import('./components/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const named = <K extends string>(loader: () => Promise<Record<K, React.ComponentType>>, name: K) =>
+  lazy(() => loader().then((m) => ({ default: m[name] })));
 
-// Where each role lands when they try to access an unauthorized route
-const ROLE_HOME: Record<UserRole, string> = {
-  SOLO: '/feed',
-  DEPENDENT: '/feed',
-  PARENT: '/parent-dashboard',
-  MAHRAM: '/chats',
-};
+const OnboardingPage = named(() => import("./pages/OnboardingPage"), "OnboardingPage");
+const SeekerFeedPage = named(() => import("./pages/SeekerFeedPage"), "SeekerFeedPage");
+const RequestsPage = named(() => import("./pages/RequestsPage"), "RequestsPage");
+const ParentDashboardPage = named(() => import("./pages/ParentDashboardPage"), "ParentDashboardPage");
+const FamilyPage = named(() => import("./pages/FamilyPage"), "FamilyPage");
+const ChatListPage = named(() => import("./pages/ChatListPage"), "ChatListPage");
+const ChatRoomPage = named(() => import("./pages/ChatRoomPage"), "ChatRoomPage");
+const ProfilePage = named(() => import("./pages/ProfilePage"), "ProfilePage");
+const ReadinessHubPage = named(() => import("./pages/ReadinessHubPage"), "ReadinessHubPage");
+const ReadinessModulePage = named(() => import("./pages/ReadinessModulePage"), "ReadinessModulePage");
+const AdminDashboardPage = named(() => import("./components/admin/AdminDashboard"), "AdminDashboard");
+const UnauthorizedPage = named(() => import("./pages/StatusPages"), "UnauthorizedPage");
+const NotFoundPage = named(() => import("./pages/StatusPages"), "NotFoundPage");
 
-/** Redirects unauthenticated users to /onboarding */
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { firebaseUser, dbUser, loading } = useAuth();
-  if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
-  if (!firebaseUser && !dbUser) return <Navigate to="/onboarding" />;
-  return <>{children}</>;
-};
-
-/**
- * Guards a route to specific DB roles.
- * - Not logged in → /onboarding
- * - Logged in but no DB profile yet → /onboarding (still needs role selection)
- * - Wrong role → their correct home route
- */
-const RoleProtectedRoute: React.FC<{
-  children: React.ReactNode;
-  allowedRoles: UserRole[];
-}> = ({ children, allowedRoles }) => {
-  const { firebaseUser, dbUser, loading } = useAuth();
-  if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
-  if (!firebaseUser && !dbUser) return <Navigate to="/onboarding" replace />;
-  if (!dbUser) return <Navigate to="/onboarding" replace />;
-  if (!allowedRoles.includes(dbUser.role)) {
-    return <Navigate to={ROLE_HOME[dbUser.role]} replace />;
-  }
-  return <>{children}</>;
-};
+function BlockedBanner() {
+  const { blockedMessage, dismissBlocked } = useAuth();
+  if (!blockedMessage) return null;
+  return (
+    <div role="alert" className="flex items-center justify-between gap-3 bg-rose-700 px-4 py-2 text-sm text-white">
+      <span>{blockedMessage} Contact support if you believe this is a mistake.</span>
+      <button type="button" onClick={dismissBlocked} aria-label="Dismiss" className="rounded p-1 hover:bg-white/10">
+        <X className="size-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router>
+        <BrowserRouter>
           <div className="min-h-screen bg-slate-50 font-sans antialiased">
             <Navbar />
-            <main className="pb-8">
-              <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
+            <BlockedBanner />
+            <main className="pb-12">
+              <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
-                  <Route path="/onboarding" element={<Onboarding />} />
+                  <Route path="/onboarding" element={<OnboardingPage />} />
+                  <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-                  <Route path="/feed" element={
-                    <RoleProtectedRoute allowedRoles={['SOLO', 'DEPENDENT', 'MAHRAM']}>
-                      <SeekerFeed />
-                    </RoleProtectedRoute>
-                  } />
-
-                  <Route path="/parent-dashboard" element={
-                    <RoleProtectedRoute allowedRoles={['PARENT']}>
-                      <ParentDashboard />
-                    </RoleProtectedRoute>
-                  } />
-
-                  <Route path="/readiness" element={
-                    <ProtectedRoute>
-                      <ReadinessHub />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/chats" element={
-                    <ProtectedRoute>
-                      <ChatList />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/chat/:connectionId" element={
-                    <ProtectedRoute>
-                      <ChatRoom />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/profile" element={
-                    <ProtectedRoute>
-                      <ProfilePage />
-                    </ProtectedRoute>
-                  } />
+                  <Route
+                    path="/feed"
+                    element={
+                      <RequireRole roles={["SOLO", "DEPENDENT"]}>
+                        <SeekerFeedPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/requests"
+                    element={
+                      <RequireRole roles={["SOLO", "DEPENDENT"]}>
+                        <RequestsPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/parent-dashboard"
+                    element={
+                      <RequireRole roles={["PARENT"]}>
+                        <ParentDashboardPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/family"
+                    element={
+                      <RequireRole roles={["SOLO", "DEPENDENT", "PARENT", "MAHRAM"]}>
+                        <FamilyPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/chats"
+                    element={
+                      <RequireAuth>
+                        <ChatListPage />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/chat/:connectionId"
+                    element={
+                      <RequireAuth>
+                        <ChatRoomPage />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/readiness"
+                    element={
+                      <RequireAuth>
+                        <ReadinessHubPage />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/readiness/:moduleId"
+                    element={
+                      <RequireAuth>
+                        <ReadinessModulePage />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/profile"
+                    element={
+                      <RequireAuth>
+                        <ProfilePage />
+                      </RequireAuth>
+                    }
+                  />
+                  <Route
+                    path="/admin"
+                    element={
+                      <AdminProtectedRoute>
+                        <AdminDashboardPage />
+                      </AdminProtectedRoute>
+                    }
+                  />
+                  <Route path="*" element={<NotFoundPage />} />
                 </Routes>
               </Suspense>
             </main>
-            <Toaster position="top-center" />
+            <Toaster position="top-center" richColors />
           </div>
-        </Router>
+        </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>
   );
