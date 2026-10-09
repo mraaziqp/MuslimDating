@@ -1,0 +1,31 @@
+{
+  "Comment": "Add nikah and nikahpath subdomains pointing to Vercel",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "nikah.arpcloudsolutions.co.za.",
+        "Type": "A",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "76.76.21.21"
+          }
+        ]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "nikahpath.arpcloudsolutions.co.za.",
+        "Type": "A",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "76.76.21.21"
+          }
+        ]
+      }
+    }
+  ]
+}
