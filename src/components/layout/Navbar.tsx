@@ -47,7 +47,12 @@ function navItemsFor(role: UserRole): NavItem[] {
     case "MAHRAM":
       return [chats, family, readiness];
     case "ADMIN":
-      return [{ to: "/admin", label: "Admin", icon: <LayoutDashboard className="size-4" /> }];
+      return [
+        { to: "/search", label: "Search", icon: <Search className="size-4" /> },
+        { to: "/feed", label: "Matches", icon: <Heart className="size-4" /> },
+        chats,
+        { to: "/admin", label: "Admin", icon: <LayoutDashboard className="size-4" /> },
+      ];
   }
 }
 

@@ -195,4 +195,38 @@ describe("Halal Seeker Search & Exploration", () => {
     });
     expect(descRes.profiles[0].age).toBeGreaterThanOrEqual(descRes.profiles[1].age ?? 0);
   });
+
+  it("allows administrator to preview and search seekers across genders", async () => {
+    const admin = await makeUser(db(), { role: "ADMIN", displayName: "System Admin" });
+    const brother = await makeUser(db(), { gender: "male", displayName: "Seeker Brother" });
+    const sister = await makeUser(db(), { gender: "female", displayName: "Seeker Sister" });
+
+    // Admin searches all suitors
+    const allRes = await searchSeekers(db(), admin, {
+      page: 1,
+      pageSize: 20,
+      sortBy: "recent",
+    });
+    expect(allRes.profiles.some((p) => p.id === brother.id)).toBe(true);
+    expect(allRes.profiles.some((p) => p.id === sister.id)).toBe(true);
+
+    // Admin filters by gender
+    const maleRes = await searchSeekers(db(), admin, {
+      page: 1,
+      pageSize: 20,
+      gender: "male",
+      sortBy: "recent",
+    });
+    expect(maleRes.profiles.some((p) => p.id === brother.id)).toBe(true);
+    expect(maleRes.profiles.some((p) => p.id === sister.id)).toBe(false);
+
+    const femaleRes = await searchSeekers(db(), admin, {
+      page: 1,
+      pageSize: 20,
+      gender: "female",
+      sortBy: "recent",
+    });
+    expect(femaleRes.profiles.some((p) => p.id === sister.id)).toBe(true);
+    expect(femaleRes.profiles.some((p) => p.id === brother.id)).toBe(false);
+  });
 });

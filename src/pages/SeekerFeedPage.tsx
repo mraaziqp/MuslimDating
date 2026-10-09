@@ -66,6 +66,12 @@ export function SeekerFeedPage() {
     feed.setData((prev) => (prev ? { ...prev, profiles: prev.profiles.filter((p) => p.id !== id) } : prev));
 
   const sendRequest = async (profile: PublicProfile) => {
+    if (user?.role === "ADMIN") {
+      toast.info(
+        "Admin Mode: Connection requests can only be sent by logged-in seekers. Sign in as a seeker (e.g. yusuf@nikahpath.test) to test sending requests and chats.",
+      );
+      return;
+    }
     setSending(profile.id);
     try {
       const view = await api.requestConnection(profile.id);

@@ -59,7 +59,7 @@ export default function App() {
                   <Route
                     path="/feed"
                     element={
-                      <RequireRole roles={["SOLO", "DEPENDENT"]}>
+                      <RequireRole roles={["SOLO", "DEPENDENT", "ADMIN"]}>
                         <SeekerFeedPage />
                       </RequireRole>
                     }
@@ -67,7 +67,7 @@ export default function App() {
                   <Route
                     path="/search"
                     element={
-                      <RequireRole roles={["SOLO", "DEPENDENT"]}>
+                      <RequireRole roles={["SOLO", "DEPENDENT", "ADMIN"]}>
                         <SearchPage />
                       </RequireRole>
                     }
@@ -75,7 +75,7 @@ export default function App() {
                   <Route
                     path="/requests"
                     element={
-                      <RequireRole roles={["SOLO", "DEPENDENT"]}>
+                      <RequireRole roles={["SOLO", "DEPENDENT", "ADMIN"]}>
                         <RequestsPage />
                       </RequireRole>
                     }
@@ -83,7 +83,7 @@ export default function App() {
                   <Route
                     path="/parent-dashboard"
                     element={
-                      <RequireRole roles={["PARENT"]}>
+                      <RequireRole roles={["PARENT", "ADMIN"]}>
                         <ParentDashboardPage />
                       </RequireRole>
                     }
@@ -91,7 +91,7 @@ export default function App() {
                   <Route
                     path="/family"
                     element={
-                      <RequireRole roles={["SOLO", "DEPENDENT", "PARENT", "MAHRAM"]}>
+                      <RequireRole roles={["SOLO", "DEPENDENT", "PARENT", "MAHRAM", "ADMIN"]}>
                         <FamilyPage />
                       </RequireRole>
                     }

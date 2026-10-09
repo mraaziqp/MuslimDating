@@ -51,6 +51,9 @@ export function UserDirectory({ onViewUser }: { onViewUser: (userId: string) => 
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
+        💡 <strong>Live Testing Hint:</strong> To test two-way courtship chats, wali reviews, or suitor connections, sign in as a seeded seeker (e.g. <code className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono font-medium text-slate-800">yusuf@nikahpath.test</code> or <code className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono font-medium text-slate-800">maryam@nikahpath.test</code>, password <code className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono font-medium text-slate-800">Bismillah-2026</code>).
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-slate-400" />

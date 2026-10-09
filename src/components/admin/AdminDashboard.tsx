@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Activity, Flag, HeartHandshake, LayoutDashboard, Users } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Activity, Flag, Heart, HeartHandshake, LayoutDashboard, MessageSquare, Search, Sparkles, Users } from "lucide-react";
 import { PageHeader } from "../shared/PageState";
+import { buttonVariants } from "../ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { oneOf } from "../../lib/constants";
 import type { AdminUserRow } from "../../lib/contracts";
+import { cn } from "../../lib/utils";
 import { AccountActionDialog } from "./AccountActionDialog";
 import { AdminUserDetailDialog } from "./AdminUserDetailDialog";
 import { AuditTrail } from "./AuditTrail";
@@ -28,7 +30,61 @@ export function AdminDashboard() {
       <PageHeader
         title="Administration"
         description="Platform health, every member and connection, moderation, and the immutable audit trail."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/search"
+              className={cn(buttonVariants({ size: "sm" }), "bg-rose-600 text-white hover:bg-rose-700 shadow-xs gap-1.5")}
+            >
+              <Search className="size-3.5" />
+              Open Search App
+            </Link>
+            <Link
+              to="/feed"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-slate-300 text-slate-700 hover:bg-slate-100 gap-1.5")}
+            >
+              <Heart className="size-3.5 text-rose-500" />
+              Matches Feed
+            </Link>
+          </div>
+        }
       />
+
+      <div className="flex flex-col gap-4 rounded-3xl border border-rose-200 bg-gradient-to-r from-rose-50 via-white to-pink-50/50 p-5 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">
+            <Sparkles className="size-3.5 text-rose-600" />
+            Live Seeker App Discovery
+          </div>
+          <h2 className="text-xl font-bold tracking-tight text-slate-900">Experience Search &amp; Courtship Discovery</h2>
+          <p className="text-sm text-slate-600">
+            Explore suitor biodata cards, halal Ta&apos;aruf search filters, deen compatibility scoring, and suitor profiles.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/search"
+            className={cn(buttonVariants({ size: "default" }), "bg-rose-600 text-white hover:bg-rose-700 shadow-sm gap-2")}
+          >
+            <Search className="size-4" />
+            Launch Search &amp; Discovery
+          </Link>
+          <Link
+            to="/feed"
+            className={cn(buttonVariants({ variant: "outline", size: "default" }), "border-rose-200 text-rose-700 hover:bg-rose-50 gap-2")}
+          >
+            <Heart className="size-4" />
+            Matches Feed
+          </Link>
+          <Link
+            to="/chats"
+            className={cn(buttonVariants({ variant: "outline", size: "default" }), "text-slate-700 hover:bg-slate-100 gap-2")}
+          >
+            <MessageSquare className="size-4" />
+            Chats
+          </Link>
+        </div>
+      </div>
       <Tabs
         value={tab}
         onValueChange={(value) => {

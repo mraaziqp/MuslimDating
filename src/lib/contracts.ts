@@ -158,6 +158,7 @@ export const seekerSearchQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(12),
   q: z.string().trim().max(120).optional(),
+  gender: z.enum(["male", "female"]).optional(),
   minAge: z.coerce.number().int().min(18).max(99).optional(),
   maxAge: z.coerce.number().int().min(18).max(99).optional(),
   location: z.string().trim().max(120).optional(),

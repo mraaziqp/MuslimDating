@@ -218,6 +218,7 @@ export function SearchPage() {
   // Search state
   const [q, setQ] = useState("");
   const [location, setLocation] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "">("");
   const [minAge, setMinAge] = useState<number | undefined>(undefined);
   const [maxAge, setMaxAge] = useState<number | undefined>(undefined);
   const [prayerFrequency, setPrayerFrequency] = useState<string>("");
@@ -292,6 +293,7 @@ export function SearchPage() {
           page: targetPage,
           pageSize: 12,
           sortBy,
+          gender: (gender as "male" | "female") || undefined,
           q: q.trim() || undefined,
           location: location.trim() || undefined,
           minAge: minAge || undefined,
@@ -325,7 +327,7 @@ export function SearchPage() {
         setLoadingMore(false);
       }
     },
-    [q, location, minAge, maxAge, prayerFrequency, dietaryHabits, maritalStatus, education, waliInvolved, sortBy],
+    [q, location, gender, minAge, maxAge, prayerFrequency, dietaryHabits, maritalStatus, education, waliInvolved, sortBy],
   );
 
   useEffect(() => {
@@ -340,6 +342,13 @@ export function SearchPage() {
   };
 
   const handleSendRequest = async (profile: PublicProfile) => {
+    if (user?.role === "ADMIN") {
+      toast.info(
+        "Admin Mode: Connection requests can only be sent by seeker accounts. Sign in as a seeker (e.g. yusuf@nikahpath.test) to test two-way courtship chats.",
+      );
+      setConfirmRequestFor(null);
+      return;
+    }
     setSending(profile.id);
     try {
       const view = await api.requestConnection(profile.id);
@@ -365,6 +374,7 @@ export function SearchPage() {
   const resetFilters = () => {
     setQ("");
     setLocation("");
+    setGender("");
     setMinAge(undefined);
     setMaxAge(undefined);
     setPrayerFrequency("");
@@ -402,6 +412,11 @@ export function SearchPage() {
         description="Explore members committed to marriage in accordance with Islamic principles. Respectful, chaperoned, and focused on compatibility."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {user?.role === "ADMIN" && (
+              <Badge className="h-8 border-purple-200 bg-purple-100 px-3 font-semibold text-purple-800">
+                Admin Discovery Mode
+              </Badge>
+            )}
             <Badge variant="outline" className="h-8 border-slate-200 bg-white px-3 font-medium text-slate-700 shadow-2xs">
               <span className="mr-1 size-2 rounded-full bg-emerald-500" />
               {gate.activeChats}/{gate.maxActiveChats} active chats
@@ -496,6 +511,49 @@ export function SearchPage() {
             </button>
           ))}
         </div>
+
+        {/* Admin Gender Filter */}
+        {user?.role === "ADMIN" && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+            <span className="text-xs font-semibold text-purple-700 mr-1">Admin Preview:</span>
+            <button
+              type="button"
+              onClick={() => setGender("")}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium transition-all",
+                gender === ""
+                  ? "bg-purple-600 text-white shadow-2xs font-semibold"
+                  : "border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100",
+              )}
+            >
+              All Suitors
+            </button>
+            <button
+              type="button"
+              onClick={() => setGender("male")}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium transition-all",
+                gender === "male"
+                  ? "bg-purple-600 text-white shadow-2xs font-semibold"
+                  : "border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100",
+              )}
+            >
+              Brothers Only
+            </button>
+            <button
+              type="button"
+              onClick={() => setGender("female")}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium transition-all",
+                gender === "female"
+                  ? "bg-purple-600 text-white shadow-2xs font-semibold"
+                  : "border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100",
+              )}
+            >
+              Sisters Only
+            </button>
+          </div>
+        )}
 
         {/* Quick Filter Pills */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100">

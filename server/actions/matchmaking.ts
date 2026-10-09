@@ -294,44 +294,51 @@ export async function getFeed(db: Database, viewer: User): Promise<FeedResponse>
     pendingOutgoingCount(db, viewer.id),
     hasWaliLink(db, viewer.id),
   ]);
+  const isAdmin = viewer.role === "ADMIN";
   const gate = {
-    readinessCompleted: viewer.readinessCompleted,
-    needsWali: requiresGuardian(viewer) && !waliLinked,
+    readinessCompleted: isAdmin ? true : viewer.readinessCompleted,
+    needsWali: isAdmin ? false : requiresGuardian(viewer) && !waliLinked,
     activeChats,
     pendingOutgoing,
     maxActiveChats: MAX_ACTIVE_CHATS,
     maxPendingOutgoing: MAX_PENDING_OUTGOING,
   };
-  if (!isSeeker(viewer) || !viewer.gender) return { profiles: [], gate };
+  if (!isSeeker(viewer) && !isAdmin) return { profiles: [], gate };
 
-  const opposite = viewer.gender === "male" ? "female" : "male";
+  const conditions: SQL[] = [
+    inArray(users.role, [...SEEKER_ROLES]),
+    eq(users.accountStatus, "ACTIVE"),
+    eq(users.onboardingCompleted, true),
+    eq(users.readinessCompleted, true),
+    ne(users.id, viewer.id),
+    sql`(NOT (${users.role} = 'DEPENDENT' OR ${users.requiresParentalVetting})
+         OR EXISTS (SELECT 1 FROM parent_child_links l WHERE l.child_id = ${users.id} AND l.kind = 'WALI'))`,
+    sql`(SELECT count(*) FROM connections c2
+          WHERE c2.status = 'APPROVED' AND (c2.sender_id = ${users.id} OR c2.receiver_id = ${users.id})) < ${MAX_ACTIVE_CHATS}`,
+  ];
+
+  if (!isAdmin) {
+    if (!viewer.gender) return { profiles: [], gate };
+    const opposite = viewer.gender === "male" ? "female" : "male";
+    conditions.push(
+      eq(users.gender, opposite),
+      sql`NOT EXISTS (
+        SELECT 1 FROM connections c
+         WHERE c.status <> 'TERMINATED'
+           AND LEAST(c.sender_id, c.receiver_id) = LEAST(${users.id}, ${viewer.id}::uuid)
+           AND GREATEST(c.sender_id, c.receiver_id) = GREATEST(${users.id}, ${viewer.id}::uuid))`,
+      sql`NOT EXISTS (
+        SELECT 1 FROM reports r
+         WHERE (r.reporter_id = ${viewer.id}::uuid AND r.reported_id = ${users.id})
+            OR (r.reporter_id = ${users.id} AND r.reported_id = ${viewer.id}::uuid))`,
+    );
+  }
+
   const rows = await db
     .select({ user: users, photoUserId: profilePhotos.userId })
     .from(users)
     .leftJoin(profilePhotos, eq(profilePhotos.userId, users.id))
-    .where(
-      and(
-        eq(users.gender, opposite),
-        inArray(users.role, [...SEEKER_ROLES]),
-        eq(users.accountStatus, "ACTIVE"),
-        eq(users.onboardingCompleted, true),
-        eq(users.readinessCompleted, true),
-        ne(users.id, viewer.id),
-        sql`NOT EXISTS (
-          SELECT 1 FROM connections c
-           WHERE c.status <> 'TERMINATED'
-             AND LEAST(c.sender_id, c.receiver_id) = LEAST(${users.id}, ${viewer.id}::uuid)
-             AND GREATEST(c.sender_id, c.receiver_id) = GREATEST(${users.id}, ${viewer.id}::uuid))`,
-        sql`NOT EXISTS (
-          SELECT 1 FROM reports r
-           WHERE (r.reporter_id = ${viewer.id}::uuid AND r.reported_id = ${users.id})
-              OR (r.reporter_id = ${users.id} AND r.reported_id = ${viewer.id}::uuid))`,
-        sql`(NOT (${users.role} = 'DEPENDENT' OR ${users.requiresParentalVetting})
-             OR EXISTS (SELECT 1 FROM parent_child_links l WHERE l.child_id = ${users.id} AND l.kind = 'WALI'))`,
-        sql`(SELECT count(*) FROM connections c2
-              WHERE c2.status = 'APPROVED' AND (c2.sender_id = ${users.id} OR c2.receiver_id = ${users.id})) < ${MAX_ACTIVE_CHATS}`,
-      ),
-    )
+    .where(and(...conditions))
     .orderBy(sql`md5(${users.id}::text || ${viewer.id}::text || current_date::text)`)
     .limit(5);
 
@@ -363,9 +370,10 @@ export async function searchSeekers(
     pendingOutgoingCount(db, viewer.id),
     hasWaliLink(db, viewer.id),
   ]);
+  const isAdmin = viewer.role === "ADMIN";
   const gate = {
-    readinessCompleted: viewer.readinessCompleted,
-    needsWali: requiresGuardian(viewer) && !waliLinked,
+    readinessCompleted: isAdmin ? true : viewer.readinessCompleted,
+    needsWali: isAdmin ? false : requiresGuardian(viewer) && !waliLinked,
     activeChats,
     pendingOutgoing,
     maxActiveChats: MAX_ACTIVE_CHATS,
@@ -380,31 +388,41 @@ export async function searchSeekers(
     gate,
   };
 
-  if (!isSeeker(viewer) || !viewer.gender) return emptyResponse;
-
-  const opposite = viewer.gender === "male" ? "female" : "male";
+  if (!isSeeker(viewer) && !isAdmin) return emptyResponse;
 
   const conditions: SQL[] = [
-    eq(users.gender, opposite),
     inArray(users.role, [...SEEKER_ROLES]),
     eq(users.accountStatus, "ACTIVE"),
     eq(users.onboardingCompleted, true),
     eq(users.readinessCompleted, true),
     ne(users.id, viewer.id),
-    sql`NOT EXISTS (
-      SELECT 1 FROM connections c
-       WHERE c.status <> 'TERMINATED'
-         AND LEAST(c.sender_id, c.receiver_id) = LEAST(${users.id}, ${viewer.id}::uuid)
-         AND GREATEST(c.sender_id, c.receiver_id) = GREATEST(${users.id}, ${viewer.id}::uuid))`,
-    sql`NOT EXISTS (
-      SELECT 1 FROM reports r
-       WHERE (r.reporter_id = ${viewer.id}::uuid AND r.reported_id = ${users.id})
-          OR (r.reporter_id = ${users.id} AND r.reported_id = ${viewer.id}::uuid))`,
     sql`(NOT (${users.role} = 'DEPENDENT' OR ${users.requiresParentalVetting})
          OR EXISTS (SELECT 1 FROM parent_child_links l WHERE l.child_id = ${users.id} AND l.kind = 'WALI'))`,
     sql`(SELECT count(*) FROM connections c2
           WHERE c2.status = 'APPROVED' AND (c2.sender_id = ${users.id} OR c2.receiver_id = ${users.id})) < ${MAX_ACTIVE_CHATS}`,
   ];
+
+  if (query.gender) {
+    conditions.push(eq(users.gender, query.gender));
+  } else if (!isAdmin) {
+    if (!viewer.gender) return emptyResponse;
+    const opposite = viewer.gender === "male" ? "female" : "male";
+    conditions.push(eq(users.gender, opposite));
+  }
+
+  if (!isAdmin) {
+    conditions.push(
+      sql`NOT EXISTS (
+        SELECT 1 FROM connections c
+         WHERE c.status <> 'TERMINATED'
+           AND LEAST(c.sender_id, c.receiver_id) = LEAST(${users.id}, ${viewer.id}::uuid)
+           AND GREATEST(c.sender_id, c.receiver_id) = GREATEST(${users.id}, ${viewer.id}::uuid))`,
+      sql`NOT EXISTS (
+        SELECT 1 FROM reports r
+         WHERE (r.reporter_id = ${viewer.id}::uuid AND r.reported_id = ${users.id})
+            OR (r.reporter_id = ${users.id} AND r.reported_id = ${viewer.id}::uuid))`,
+    );
+  }
 
   if (query.q) {
     const pattern = `%${query.q.trim()}%`;
