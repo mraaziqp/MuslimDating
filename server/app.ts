@@ -20,6 +20,7 @@ import {
   removePhotoSchema,
   reportSchema,
   reportUpdateSchema,
+  seekerSearchQuerySchema,
   sendMessageSchema,
   terminateConnectionSchema,
   userDirectoryQuerySchema,
@@ -35,6 +36,7 @@ import {
   decideConnection,
   getFeed,
   listConnections,
+  searchSeekers,
   setPhotoConsent,
   terminateConnection,
   withdrawConnection,
@@ -65,7 +67,10 @@ function secretsMatch(provided: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-const afterQuerySchema = z.object({ after: z.iso.datetime().optional() });
+const chatQuerySchema = z.object({
+  after: z.iso.datetime().optional(),
+  channel: z.enum(["FAMILY", "DIRECT"]).optional(),
+});
 const photoVariantSchema = z.enum(["full", "blur"]);
 
 export function createApp(): express.Express {
@@ -203,6 +208,14 @@ export function createApp(): express.Express {
 
   // ── Matchmaking ───────────────────────────────────────────────────────────
   app.get("/api/feed", ...member, route(async (req) => getFeed(await getDb(), actor(req))));
+  app.get(
+    "/api/seekers/search",
+    ...member,
+    route(async (req) => {
+      const query = parseInput(seekerSearchQuerySchema, req.query);
+      return searchSeekers(await getDb(), actor(req), query);
+    }),
+  );
   app.get("/api/connections", ...member, route(async (req) => listConnections(await getDb(), actor(req))));
 
   app.post(
@@ -251,8 +264,14 @@ export function createApp(): express.Express {
     "/api/chats/:id",
     ...member,
     route(async (req) => {
-      const { after } = parseInput(afterQuerySchema, req.query);
-      return getChat(await getDb(), actor(req), uuidParam(req.params.id), after ? new Date(after) : undefined);
+      const { after, channel } = parseInput(chatQuerySchema, req.query);
+      return getChat(
+        await getDb(),
+        actor(req),
+        uuidParam(req.params.id),
+        after ? new Date(after) : undefined,
+        channel,
+      );
     }),
   );
 
@@ -260,8 +279,8 @@ export function createApp(): express.Express {
     "/api/chats/:id/messages",
     ...member,
     route(async (req) => {
-      const { text } = parseInput(sendMessageSchema, req.body);
-      return sendMessage(await getDb(), actor(req), uuidParam(req.params.id), text);
+      const { text, channel } = parseInput(sendMessageSchema, req.body);
+      return sendMessage(await getDb(), actor(req), uuidParam(req.params.id), text, channel);
     }),
   );
 

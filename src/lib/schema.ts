@@ -210,10 +210,12 @@ export const messages = pgTable(
     senderId: uuid("sender_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull().default("FAMILY").$type<"FAMILY" | "DIRECT">(),
     text: text("text").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    index("idx_messages_connection_channel_created").on(t.connectionId, t.channel, t.createdAt),
     index("idx_messages_connection_created").on(t.connectionId, t.createdAt),
     check("chk_messages_length", sql`char_length(${t.text}) BETWEEN 1 AND 2000`),
   ],

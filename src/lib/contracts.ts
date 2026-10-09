@@ -103,7 +103,10 @@ export type TerminateConnectionInput = z.infer<typeof terminateConnectionSchema>
 
 export const photoConsentSchema = z.object({ consent: z.boolean() });
 
-export const sendMessageSchema = z.object({ text: trimmed(1, 2000) });
+export const sendMessageSchema = z.object({
+  text: trimmed(1, 2000),
+  channel: z.enum(["FAMILY", "DIRECT"]).default("FAMILY"),
+});
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 export const reportSchema = z.object({
@@ -150,6 +153,25 @@ export const userDirectoryQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
 });
 export type UserDirectoryQuery = z.infer<typeof userDirectoryQuerySchema>;
+
+export const seekerSearchQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(12),
+  q: z.string().trim().max(120).optional(),
+  minAge: z.coerce.number().int().min(18).max(99).optional(),
+  maxAge: z.coerce.number().int().min(18).max(99).optional(),
+  location: z.string().trim().max(120).optional(),
+  prayerFrequency: z.enum(PRAYER_FREQUENCIES).optional(),
+  dietaryHabits: z.enum(DIETARY_HABITS).optional(),
+  maritalStatus: z.enum(MARITAL_STATUSES).optional(),
+  education: z.enum(EDUCATION_LEVELS).optional(),
+  waliInvolved: z.preprocess(
+    (val) => (val === "true" || val === true ? true : val === "false" || val === false ? false : undefined),
+    z.boolean().optional(),
+  ),
+  sortBy: z.enum(["recent", "age_asc", "age_desc", "readiness"]).default("recent"),
+});
+export type SeekerSearchQuery = z.infer<typeof seekerSearchQuerySchema>;
 
 export const adminConnectionsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -263,6 +285,15 @@ export interface FeedResponse {
   gate: FeedGate;
 }
 
+export interface SeekerSearchResponse {
+  profiles: PublicProfile[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  gate: FeedGate;
+}
+
 export interface PersonBrief {
   id: string;
   displayName: string;
@@ -304,6 +335,7 @@ export interface MessageView {
   senderId: string;
   senderName: string;
   senderKind: "SELF" | "COUNTERPART" | "MAHRAM";
+  channel: "FAMILY" | "DIRECT";
   text: string;
   createdAt: string;
 }
@@ -312,6 +344,10 @@ export interface ChatDetail {
   connection: ConnectionView;
   messages: MessageView[];
   canSend: boolean;
+  activeChannel: "FAMILY" | "DIRECT";
+  hasFamilyChat: boolean;
+  familyMessageCount: number;
+  directMessageCount: number;
 }
 
 export interface FamilyLink {
