@@ -2,8 +2,11 @@
 import type { UserRole } from "./schema";
 
 export const MAX_ACTIVE_CHATS = 3;
-export const STALE_CONNECTION_DAYS = 7;
+export const STALE_CONNECTION_DAYS = 3;
 export const MAX_PENDING_OUTGOING = 5;
+
+export const CHAT_CHANNELS = ["FAMILY", "DIRECT"] as const;
+export type ChatChannel = (typeof CHAT_CHANNELS)[number];
 
 export const SEEKER_ROLES = ["SOLO", "DEPENDENT"] as const;
 export const SELF_SELECTABLE_ROLES = ["SOLO", "DEPENDENT", "PARENT", "MAHRAM"] as const;

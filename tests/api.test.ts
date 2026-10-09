@@ -98,6 +98,10 @@ describe("HTTP API security boundary", () => {
     const feed = await call("/api/feed", { token });
     expect(feed.status).toBe(200);
 
+    const search = await call("/api/seekers/search", { token });
+    expect(search.status).toBe(200);
+    expect(Array.isArray(search.body.profiles)).toBe(true);
+
     const blocked = await call("/api/connections", {
       method: "POST",
       token,

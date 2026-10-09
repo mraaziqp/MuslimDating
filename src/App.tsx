@@ -15,6 +15,7 @@ const named = <K extends string>(loader: () => Promise<Record<K, React.Component
 
 const OnboardingPage = named(() => import("./pages/OnboardingPage"), "OnboardingPage");
 const SeekerFeedPage = named(() => import("./pages/SeekerFeedPage"), "SeekerFeedPage");
+const SearchPage = named(() => import("./pages/SearchPage"), "SearchPage");
 const RequestsPage = named(() => import("./pages/RequestsPage"), "RequestsPage");
 const ParentDashboardPage = named(() => import("./pages/ParentDashboardPage"), "ParentDashboardPage");
 const FamilyPage = named(() => import("./pages/FamilyPage"), "FamilyPage");
@@ -60,6 +61,14 @@ export default function App() {
                     element={
                       <RequireRole roles={["SOLO", "DEPENDENT"]}>
                         <SeekerFeedPage />
+                      </RequireRole>
+                    }
+                  />
+                  <Route
+                    path="/search"
+                    element={
+                      <RequireRole roles={["SOLO", "DEPENDENT"]}>
+                        <SearchPage />
                       </RequireRole>
                     }
                   />

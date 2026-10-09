@@ -301,6 +301,13 @@ export const MIGRATIONS: Migration[] = [
       addConstraint("users", "users_username_unique", "UNIQUE (username)"),
     ],
   },
+  {
+    id: "0003_chat_channels",
+    statements: [
+      addColumn("messages", "channel text NOT NULL DEFAULT 'FAMILY'"),
+      "CREATE INDEX IF NOT EXISTS idx_messages_connection_channel_created ON messages (connection_id, channel, created_at);",
+    ],
+  },
 ];
 
 /**

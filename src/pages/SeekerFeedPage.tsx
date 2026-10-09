@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Flag, Heart, MapPin, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { BookOpen, Flag, Heart, MapPin, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ProfileDetails } from "../components/shared/ProfileDetails";
 import { EmptyState, ErrorState, PageHeader, PageLoader } from "../components/shared/PageState";
@@ -107,15 +107,34 @@ export function SeekerFeedPage() {
 
       <GateNotice gate={gate} />
 
+      <div className="flex items-center justify-between rounded-2xl border border-rose-100 bg-rose-50/60 p-4">
+        <div className="space-y-0.5">
+          <p className="text-sm font-semibold text-rose-950">Looking to explore by specific criteria?</p>
+          <p className="text-xs text-rose-700">Filter suitors by practice, location, age, education, and wali involvement.</p>
+        </div>
+        <Link
+          to="/search"
+          className={cn(buttonVariants({ size: "sm" }), "bg-rose-600 text-white hover:bg-rose-700")}
+        >
+          <Search className="size-3.5" />
+          Search suitors
+        </Link>
+      </div>
+
       {!user?.gender ? null : profiles.length === 0 ? (
         <EmptyState
           icon={<Sparkles />}
           title="No new introductions today"
-          description="New profiles are curated daily from members who have completed the Readiness Hub. Check back tomorrow, in shaa Allah."
+          description="Your daily 5 batch refreshes every 24 hours. You can also explore all eligible community suitors through the search page."
           action={
-            <Link to="/requests" className={buttonVariants({ variant: "outline" })}>
-              View your requests
-            </Link>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Link to="/search" className={cn(buttonVariants(), "bg-rose-600 text-white hover:bg-rose-700")}>
+                <Search className="size-4" /> Search suitors
+              </Link>
+              <Link to="/requests" className={buttonVariants({ variant: "outline" })}>
+                View your requests
+              </Link>
+            </div>
           }
         />
       ) : (

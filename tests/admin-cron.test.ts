@@ -37,16 +37,21 @@ async function approvedConnection() {
 }
 
 describe("ghosting cleaner", () => {
-  it("terminates APPROVED connections idle for more than 7 days and audits it", async () => {
+  it("terminates APPROVED connections idle for more than 3 days and audits it", async () => {
     const stale = await approvedConnection();
     const fresh = await approvedConnection();
+    const twoDaysOld = await approvedConnection();
     await db().execute(
-      sql`UPDATE connections SET last_activity_at = now() - interval '8 days' WHERE id = ${stale.connectionId}::uuid`,
+      sql`UPDATE connections SET last_activity_at = now() - interval '4 days' WHERE id = ${stale.connectionId}::uuid`,
+    );
+    await db().execute(
+      sql`UPDATE connections SET last_activity_at = now() - interval '2 days' WHERE id = ${twoDaysOld.connectionId}::uuid`,
     );
 
     const result = await cleanupStaleConnections(db());
     expect(result.terminatedConnectionIds).toContain(stale.connectionId);
     expect(result.terminatedConnectionIds).not.toContain(fresh.connectionId);
+    expect(result.terminatedConnectionIds).not.toContain(twoDaysOld.connectionId);
 
     const [row] = await db().select().from(connections).where(eq(connections.id, stale.connectionId));
     expect(row?.status).toBe("TERMINATED");

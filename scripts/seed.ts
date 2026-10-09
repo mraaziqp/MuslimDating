@@ -80,6 +80,7 @@ try {
       bio: "My father reviews my requests — I value his guidance.",
     });
     const omar = await make({
+      ...seeker,
       email: "omar@nikahpath.test",
       role: "SOLO",
       displayName: "Omar Hendricks",
@@ -87,6 +88,62 @@ try {
       age: 26,
       location: "Durban, South Africa",
       profession: "Teacher",
+      prayerFrequency: "Always",
+      dietaryHabits: "Strictly Halal",
+      education: "Bachelor's",
+      maritalStatus: "Never Married",
+      languages: ["English"],
+      bio: "High school Islamic studies and history teacher. Looking for someone grounded in deen and family values.",
+      completedModules: allModules,
+    });
+    const bilal = await make({
+      ...seeker,
+      email: "bilal@nikahpath.test",
+      role: "SOLO",
+      displayName: "Bilal Kassim",
+      gender: "male",
+      age: 32,
+      location: "Cape Town, South Africa",
+      profession: "Software Architect",
+      prayerFrequency: "Always",
+      dietaryHabits: "Strictly Halal",
+      education: "Master's",
+      maritalStatus: "Never Married",
+      languages: ["English", "Arabic"],
+      bio: "Tech professional passionate about community projects, hiking Table Mountain, and memorising Juz Amma.",
+      completedModules: allModules,
+    });
+    const tariq = await make({
+      ...seeker,
+      email: "tariq@nikahpath.test",
+      role: "SOLO",
+      displayName: "Tariq Al-Mansoor",
+      gender: "male",
+      age: 28,
+      location: "Johannesburg, South Africa",
+      profession: "Financial Analyst",
+      prayerFrequency: "Always",
+      dietaryHabits: "Strictly Halal",
+      education: "Bachelor's",
+      maritalStatus: "Never Married",
+      languages: ["English", "Urdu"],
+      bio: "Humble, dedicated to prayer, and looking for a pious partner to build a serene home with.",
+    });
+    const farhan = await make({
+      ...seeker,
+      email: "farhan@nikahpath.test",
+      role: "SOLO",
+      displayName: "Farhan Jaffer",
+      gender: "male",
+      age: 35,
+      location: "Durban, South Africa",
+      profession: "High School Principal",
+      prayerFrequency: "Usually",
+      dietaryHabits: "Halal",
+      education: "Master's",
+      maritalStatus: "Divorced",
+      languages: ["English", "Gujarati"],
+      bio: "Father of one, educator, mature and looking for a kind companion with a shared vision.",
     });
     const maryam = await make({
       ...seeker,
@@ -133,12 +190,103 @@ try {
       dietaryHabits: "Halal",
       bio: "Numbers by day, community volunteer on weekends.",
     });
+    const fatima = await make({
+      ...seeker,
+      email: "fatima@nikahpath.test",
+      role: "SOLO",
+      displayName: "Fatima Al-Zahra",
+      gender: "female",
+      age: 26,
+      location: "Cape Town, South Africa",
+      profession: "Speech Therapist",
+      prayerFrequency: "Always",
+      dietaryHabits: "Strictly Halal",
+      education: "Master's",
+      maritalStatus: "Never Married",
+      languages: ["English", "Arabic"],
+      bio: "Speech therapist with a love for calligraphy, family gatherings, and Islamic history.",
+      completedModules: allModules,
+    });
+    const zainab = await make({
+      ...seeker,
+      email: "zainab@nikahpath.test",
+      role: "DEPENDENT",
+      requiresParentalVetting: true,
+      displayName: "Zainab Khan",
+      gender: "female",
+      age: 25,
+      location: "Johannesburg, South Africa",
+      profession: "Architect",
+      prayerFrequency: "Always",
+      dietaryHabits: "Strictly Halal",
+      education: "Bachelor's",
+      maritalStatus: "Never Married",
+      languages: ["English", "Urdu"],
+      bio: "Architect focusing on sustainable community spaces. Guided by my father in every proposal.",
+      completedModules: allModules,
+    });
+    const salma = await make({
+      ...seeker,
+      email: "salma@nikahpath.test",
+      role: "SOLO",
+      displayName: "Salma Adam",
+      gender: "female",
+      age: 29,
+      location: "Durban, South Africa",
+      profession: "Clinical Psychologist",
+      prayerFrequency: "Always",
+      dietaryHabits: "Strictly Halal",
+      education: "Master's",
+      maritalStatus: "Never Married",
+      languages: ["English", "Zulu"],
+      bio: "Empathetic, committed to mental wellbeing in our communities, active volunteer at the local masjid.",
+    });
+    const yasmin = await make({
+      ...seeker,
+      email: "yasmin@nikahpath.test",
+      role: "SOLO",
+      displayName: "Yasmin Parker",
+      gender: "female",
+      age: 33,
+      location: "Cape Town, South Africa",
+      profession: "Data Scientist",
+      prayerFrequency: "Usually",
+      dietaryHabits: "Halal",
+      education: "Master's",
+      maritalStatus: "Widowed",
+      languages: ["English"],
+      bio: "Gentle-hearted mother of one seeking a pious, understanding brother for a blessed second chapter.",
+    });
+    const layla = await make({
+      ...seeker,
+      email: "layla@nikahpath.test",
+      role: "DEPENDENT",
+      requiresParentalVetting: true,
+      displayName: "Layla Banderker",
+      gender: "female",
+      age: 23,
+      location: "Pretoria, South Africa",
+      profession: "Pharmacist",
+      prayerFrequency: "Always",
+      dietaryHabits: "Strictly Halal",
+      education: "Bachelor's",
+      maritalStatus: "Never Married",
+      languages: ["English", "Afrikaans"],
+      bio: "Hospital pharmacist, quiet nature, close to my family. Looking for someone honest and kind.",
+    });
     const abdullah = await make({
       email: "abdullah@nikahpath.test",
       role: "PARENT",
       displayName: "Abdullah Moosa",
       gender: "male",
       age: 55,
+    });
+    const farooq = await make({
+      email: "farooq@nikahpath.test",
+      role: "PARENT",
+      displayName: "Farooq Khan",
+      gender: "male",
+      age: 58,
     });
     const ibrahim = await make({
       email: "ibrahim@nikahpath.test",
@@ -156,6 +304,8 @@ try {
     });
 
     await link(abdullah, amina, "WALI");
+    await link(abdullah, layla, "WALI");
+    await link(farooq, zainab, "WALI");
     await link(ibrahim, zaid, "WALI");
     await link(khalid, maryam, "MAHRAM");
     await link(khalid, huda, "MAHRAM");
@@ -182,7 +332,27 @@ try {
     await db.execute(sql`SELECT 1`);
 
     console.log("Seeded demo accounts (password for all: %s)", PASSWORD);
-    for (const u of [admin, yusuf, zaid, omar, maryam, amina, huda, abdullah, ibrahim, khalid]) {
+    for (const u of [
+      admin,
+      yusuf,
+      zaid,
+      omar,
+      bilal,
+      tariq,
+      farhan,
+      maryam,
+      amina,
+      huda,
+      fatima,
+      zainab,
+      salma,
+      yasmin,
+      layla,
+      abdullah,
+      farooq,
+      ibrahim,
+      khalid,
+    ]) {
       console.log(`  ${u.role.padEnd(9)} ${u.email}`);
     }
   }

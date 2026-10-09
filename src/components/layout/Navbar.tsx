@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  Search,
   Send,
   Shield,
   UserCircle,
@@ -35,6 +36,7 @@ function navItemsFor(role: UserRole): NavItem[] {
     case "DEPENDENT":
       return [
         { to: "/feed", label: "Matches", icon: <Heart className="size-4" /> },
+        { to: "/search", label: "Search", icon: <Search className="size-4" /> },
         { to: "/requests", label: "Requests", icon: <Send className="size-4" /> },
         chats,
         readiness,

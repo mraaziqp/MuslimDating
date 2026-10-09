@@ -16,7 +16,7 @@
  *   • APPROVED requires a mahram and neither party may exceed 3 APPROVED chats (trigger)
  * Every transition is an optimistic-concurrency UPDATE guarded by `version`.
  */
-import { and, count, desc, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, inArray, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import {
   MAX_ACTIVE_CHATS,
   MAX_PENDING_OUTGOING,
@@ -26,6 +26,8 @@ import {
   type ConnectionView,
   type FeedResponse,
   type PersonBrief,
+  type SeekerSearchQuery,
+  type SeekerSearchResponse,
 } from "../../src/lib/contracts.js";
 import {
   connections,
@@ -44,6 +46,7 @@ import { AppError, errors, translateDatabaseError } from "../http.js";
 import { photoAccessFor, requiresGuardian, toBrief, toPublicProfile } from "../presenters.js";
 import { enforceRateLimit } from "../rate-limit.js";
 import { rowsOf } from "../rows.js";
+import { cleanupStaleConnections } from "./cron.js";
 
 const PENDING_STATUSES: ConnectionStatus[] = ["PENDING_MALE_PARENT", "PENDING_FEMALE_PARENT"];
 const LIVE_STATUSES: ConnectionStatus[] = [...PENDING_STATUSES, "APPROVED"];
@@ -349,7 +352,158 @@ export async function getFeed(db: Database, viewer: User): Promise<FeedResponse>
   };
 }
 
+/** Full halal search and exploration with granular filters, pagination, and Islamic privacy enforcement. */
+export async function searchSeekers(
+  db: Database,
+  viewer: User,
+  query: SeekerSearchQuery,
+): Promise<SeekerSearchResponse> {
+  const [activeChats, pendingOutgoing, waliLinked] = await Promise.all([
+    activeChatCount(db, viewer.id),
+    pendingOutgoingCount(db, viewer.id),
+    hasWaliLink(db, viewer.id),
+  ]);
+  const gate = {
+    readinessCompleted: viewer.readinessCompleted,
+    needsWali: requiresGuardian(viewer) && !waliLinked,
+    activeChats,
+    pendingOutgoing,
+    maxActiveChats: MAX_ACTIVE_CHATS,
+    maxPendingOutgoing: MAX_PENDING_OUTGOING,
+  };
+  const emptyResponse: SeekerSearchResponse = {
+    profiles: [],
+    total: 0,
+    page: query.page,
+    pageSize: query.pageSize,
+    totalPages: 0,
+    gate,
+  };
+
+  if (!isSeeker(viewer) || !viewer.gender) return emptyResponse;
+
+  const opposite = viewer.gender === "male" ? "female" : "male";
+
+  const conditions: SQL[] = [
+    eq(users.gender, opposite),
+    inArray(users.role, [...SEEKER_ROLES]),
+    eq(users.accountStatus, "ACTIVE"),
+    eq(users.onboardingCompleted, true),
+    eq(users.readinessCompleted, true),
+    ne(users.id, viewer.id),
+    sql`NOT EXISTS (
+      SELECT 1 FROM connections c
+       WHERE c.status <> 'TERMINATED'
+         AND LEAST(c.sender_id, c.receiver_id) = LEAST(${users.id}, ${viewer.id}::uuid)
+         AND GREATEST(c.sender_id, c.receiver_id) = GREATEST(${users.id}, ${viewer.id}::uuid))`,
+    sql`NOT EXISTS (
+      SELECT 1 FROM reports r
+       WHERE (r.reporter_id = ${viewer.id}::uuid AND r.reported_id = ${users.id})
+          OR (r.reporter_id = ${users.id} AND r.reported_id = ${viewer.id}::uuid))`,
+    sql`(NOT (${users.role} = 'DEPENDENT' OR ${users.requiresParentalVetting})
+         OR EXISTS (SELECT 1 FROM parent_child_links l WHERE l.child_id = ${users.id} AND l.kind = 'WALI'))`,
+    sql`(SELECT count(*) FROM connections c2
+          WHERE c2.status = 'APPROVED' AND (c2.sender_id = ${users.id} OR c2.receiver_id = ${users.id})) < ${MAX_ACTIVE_CHATS}`,
+  ];
+
+  if (query.q) {
+    const pattern = `%${query.q.trim()}%`;
+    conditions.push(
+      or(
+        ilike(users.displayName, pattern),
+        ilike(users.location, pattern),
+        ilike(users.profession, pattern),
+        ilike(users.bio, pattern),
+      )!,
+    );
+  }
+
+  if (query.minAge !== undefined) {
+    conditions.push(gte(users.age, query.minAge));
+  }
+  if (query.maxAge !== undefined) {
+    conditions.push(lte(users.age, query.maxAge));
+  }
+  if (query.location) {
+    conditions.push(ilike(users.location, `%${query.location.trim()}%`));
+  }
+  if (query.prayerFrequency) {
+    conditions.push(eq(users.prayerFrequency, query.prayerFrequency));
+  }
+  if (query.dietaryHabits) {
+    conditions.push(eq(users.dietaryHabits, query.dietaryHabits));
+  }
+  if (query.maritalStatus) {
+    conditions.push(eq(users.maritalStatus, query.maritalStatus));
+  }
+  if (query.education) {
+    conditions.push(eq(users.education, query.education));
+  }
+  if (query.waliInvolved === true) {
+    conditions.push(or(eq(users.role, "DEPENDENT"), eq(users.requiresParentalVetting, true))!);
+  } else if (query.waliInvolved === false) {
+    conditions.push(and(eq(users.role, "SOLO"), eq(users.requiresParentalVetting, false))!);
+  }
+
+  const whereClause = and(...conditions);
+
+  const [countRow] = await db
+    .select({ n: count() })
+    .from(users)
+    .where(whereClause);
+  const total = countRow?.n ?? 0;
+  const totalPages = Math.ceil(total / query.pageSize);
+
+  let sortExpr: SQL;
+  switch (query.sortBy) {
+    case "age_asc":
+      sortExpr = sql`${users.age} ASC NULLS LAST`;
+      break;
+    case "age_desc":
+      sortExpr = sql`${users.age} DESC NULLS LAST`;
+      break;
+    case "readiness":
+      sortExpr = sql`cardinality(${users.completedModules}) DESC, ${users.createdAt} DESC`;
+      break;
+    case "recent":
+    default:
+      sortExpr = desc(users.createdAt);
+      break;
+  }
+
+  const offset = (query.page - 1) * query.pageSize;
+  const rows = await db
+    .select({ user: users, photoUserId: profilePhotos.userId })
+    .from(users)
+    .leftJoin(profilePhotos, eq(profilePhotos.userId, users.id))
+    .where(whereClause)
+    .orderBy(sortExpr)
+    .limit(query.pageSize)
+    .offset(offset);
+
+  return {
+    gate,
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    totalPages,
+    profiles: rows.map((r) =>
+      toPublicProfile(
+        r.user,
+        photoAccessFor({
+          viewer,
+          owner: r.user,
+          ownerHasPhoto: r.photoUserId !== null,
+          viewerIsGuardianOfOwner: false,
+          approvedConnection: null,
+        }),
+      ),
+    ),
+  };
+}
+
 export async function listConnections(db: Database, actor: User): Promise<ConnectionView[]> {
+  await cleanupStaleConnections(db);
   const waliOf = await db
     .select({ childId: parentChildLinks.childId })
     .from(parentChildLinks)

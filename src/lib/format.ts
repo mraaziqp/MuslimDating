@@ -24,7 +24,7 @@ export const STATUS_LABELS: Record<ConnectionStatus, string> = {
 
 export function closedReasonLabel(reason: string | null): string | null {
   if (!reason) return null;
-  if (reason === "INACTIVITY") return "Closed automatically after 7 days without messages";
+  if (reason === "INACTIVITY") return "Unmatched automatically after 3 days without replies";
   if (reason === "WITHDRAWN") return "Request withdrawn";
   if (reason === "ACCOUNT_BANNED") return "Closed by moderation";
   if (reason === "ROLE_CHANGED" || reason === "MAHRAM_ROLE_REMOVED") return "Closed after an account change";

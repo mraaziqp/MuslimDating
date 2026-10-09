@@ -29,6 +29,8 @@ import type {
   RegisterInput,
   ReportInput,
   ReportUpdateInput,
+  SeekerSearchQuery,
+  SeekerSearchResponse,
   SelfUser,
   SystemMetrics,
   UserDirectoryQuery,
@@ -132,7 +134,7 @@ async function request<T>(method: string, path: string, body?: unknown, options:
   return (await res.json()) as T;
 }
 
-function queryString(params: Record<string, string | number | undefined>): string {
+function queryString(params: Record<string, string | number | boolean | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== "") search.set(key, String(value));
@@ -162,6 +164,8 @@ export const api = {
     request<ReadinessResult>("POST", `/api/readiness/${moduleId}`, { answers }),
 
   feed: () => request<FeedResponse>("GET", "/api/feed"),
+  searchSeekers: (query: Partial<SeekerSearchQuery> = {}) =>
+    request<SeekerSearchResponse>("GET", `/api/seekers/search${queryString(query)}`),
   connections: () => request<ConnectionView[]>("GET", "/api/connections"),
   requestConnection: (receiverId: string) => request<ConnectionView>("POST", "/api/connections", { receiverId }),
   decide: (id: string, input: ConnectionDecisionInput) =>
@@ -172,8 +176,10 @@ export const api = {
   photoConsent: (id: string, consent: boolean) =>
     request<ConnectionView>("POST", `/api/connections/${id}/photo-consent`, { consent }),
 
-  chat: (id: string, after?: string) => request<ChatDetail>("GET", `/api/chats/${id}${queryString({ after })}`),
-  sendMessage: (id: string, text: string) => request<MessageView>("POST", `/api/chats/${id}/messages`, { text }),
+  chat: (id: string, options?: { after?: string; channel?: "FAMILY" | "DIRECT" }) =>
+    request<ChatDetail>("GET", `/api/chats/${id}${queryString({ after: options?.after, channel: options?.channel })}`),
+  sendMessage: (id: string, text: string, channel: "FAMILY" | "DIRECT" = "FAMILY") =>
+    request<MessageView>("POST", `/api/chats/${id}/messages`, { text, channel }),
 
   family: () => request<FamilyOverview>("GET", "/api/family"),
   createInvite: (kind: LinkKind) => request<InviteCreated>("POST", "/api/family/invites", { kind }),
