@@ -3,16 +3,19 @@ $ErrorActionPreference = 'Stop'
 $domain = "arpcloudsolutions.co.za"
 
 Write-Host "Verifying AWS authentication..." -ForegroundColor Cyan
-try {
-    aws sts get-caller-identity --output table
-} catch {
-    Write-Host "AWS session expired or absent. Please run 'aws login' first." -ForegroundColor Red
+$whoami = aws sts get-caller-identity --output text 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "AWS session expired or absent. Please run 'aws login' in your terminal." -ForegroundColor Red
     exit 1
 }
 
 Write-Host "Locating Route 53 hosted zone for $domain..." -ForegroundColor Cyan
-$zoneId = aws route53 list-hosted-zones --query "HostedZones[?Name=='$($domain).'].Id | [0]" --output text
-$zoneId = $zoneId.Trim() -replace '^/hostedzone/', ''
+$rawZone = aws route53 list-hosted-zones --query "HostedZones[?Name=='$($domain).'].Id | [0]" --output text 2>&1
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($rawZone) -or $rawZone -eq "None") {
+    Write-Host "Hosted zone for $domain not found in this AWS account." -ForegroundColor Red
+    exit 1
+}
+$zoneId = $rawZone.Trim() -replace '^/hostedzone/', ''
 
 if (-not $zoneId -or $zoneId -eq "None") {
     Write-Host "Hosted zone for $domain not found in this AWS account." -ForegroundColor Red
