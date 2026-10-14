@@ -36,7 +36,7 @@ export function ReadinessModulePage() {
         toast.success(
           module.required ? "Module complete — connection requests are now unlocked." : "Module complete. Barakallahu feek!",
         );
-        navigate(module.required && (user.role === "SOLO" || user.role === "DEPENDENT") ? "/feed" : "/readiness");
+        navigate(module.required && (user.role === "SOLO" || user.role === "DEPENDENT") ? "/discover" : "/readiness");
       } else {
         setResult({ correct: outcome.correct, total: outcome.total });
       }
@@ -48,8 +48,8 @@ export function ReadinessModulePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 p-4">
-      <Link to="/readiness" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-rose-600">
+    <div className="mx-auto max-w-2xl space-y-6 p-4 sm:space-y-8">
+      <Link to="/readiness" className="-ml-2 inline-flex h-10 items-center gap-1 rounded-full px-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-rose-600">
         <ArrowLeft className="size-4" /> Readiness Hub
       </Link>
 

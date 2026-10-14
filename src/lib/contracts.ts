@@ -27,8 +27,10 @@ import {
   PHOTO_MIME_TYPES,
   PRAYER_FREQUENCIES,
   PRIVACY_FIELD_KEYS,
+  REACTION_KINDS,
   SELF_SELECTABLE_ROLES,
   type PrivacyFieldKey,
+  type ReactionKind,
 } from "./constants.js";
 
 // ─── Request schemas ──────────────────────────────────────────────────────────
@@ -154,10 +156,24 @@ export const userDirectoryQuerySchema = z.object({
 });
 export type UserDirectoryQuery = z.infer<typeof userDirectoryQuerySchema>;
 
+const queryFlag = z.preprocess(
+  (val) => (val === "true" || val === true ? true : val === "false" || val === false ? false : undefined),
+  z.boolean().optional(),
+);
+
+export const reactionSchema = z.object({ kind: z.enum(REACTION_KINDS) });
+export type ReactionInput = z.infer<typeof reactionSchema>;
+
+/** An empty or missing note clears it. */
+export const savedNoteSchema = z.object({ note: optionalText(500) });
+
 export const seekerSearchQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(12),
+  /** Overrides `page`; lets a list that removes rows as it goes ask for "everything after what I hold". */
+  offset: z.coerce.number().int().min(0).max(10_000).optional(),
   q: z.string().trim().max(120).optional(),
+  /** Administrators only (preview). Seekers always see the opposite gender. */
   gender: z.enum(["male", "female"]).optional(),
   minAge: z.coerce.number().int().min(18).max(99).optional(),
   maxAge: z.coerce.number().int().min(18).max(99).optional(),
@@ -166,10 +182,9 @@ export const seekerSearchQuerySchema = z.object({
   dietaryHabits: z.enum(DIETARY_HABITS).optional(),
   maritalStatus: z.enum(MARITAL_STATUSES).optional(),
   education: z.enum(EDUCATION_LEVELS).optional(),
-  waliInvolved: z.preprocess(
-    (val) => (val === "true" || val === true ? true : val === "false" || val === false ? false : undefined),
-    z.boolean().optional(),
-  ),
+  waliInvolved: queryFlag,
+  /** Leave out profiles already on the viewer's shortlist (used by the card deck). */
+  hideSaved: queryFlag,
   sortBy: z.enum(["recent", "age_asc", "age_desc", "readiness"]).default("recent"),
 });
 export type SeekerSearchQuery = z.infer<typeof seekerSearchQuerySchema>;
@@ -281,18 +296,47 @@ export interface FeedGate {
   maxPendingOutgoing: number;
 }
 
+/** A profile as it appears while browsing, with the viewer's own shortlist state. */
+export interface DiscoverProfile extends PublicProfile {
+  saved: boolean;
+  /** The viewer's own private note on a saved profile. Never visible to anyone else. */
+  note: string | null;
+}
+
 export interface FeedResponse {
-  profiles: PublicProfile[];
+  profiles: DiscoverProfile[];
   gate: FeedGate;
 }
 
 export interface SeekerSearchResponse {
-  profiles: PublicProfile[];
+  profiles: DiscoverProfile[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
+  /** Profiles currently hidden because the viewer passed on them. */
+  passedCount: number;
   gate: FeedGate;
+}
+
+export interface SavedProfilesResponse {
+  profiles: DiscoverProfile[];
+  gate: FeedGate;
+}
+
+export interface ReactionResult {
+  targetId: string;
+  kind: ReactionKind;
+}
+
+/** Counts behind the navigation badges. */
+export interface ActivitySummary {
+  /** Requests waiting on this user's own decision (as recipient or as wali). */
+  needsResponse: number;
+  activeChats: number;
+  pendingOutgoing: number;
+  /** Messages from others that arrived since this user last opened each chat room. */
+  unreadMessages: number;
 }
 
 export interface PersonBrief {
@@ -327,6 +371,8 @@ export interface ConnectionView {
   closedReason: string | null;
   lastActivityAt: string;
   inactiveDays: number;
+  /** Unread messages for the viewer across the rooms they can open; 0 for anyone who cannot open the chat. */
+  unreadCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -349,6 +395,8 @@ export interface ChatDetail {
   hasFamilyChat: boolean;
   familyMessageCount: number;
   directMessageCount: number;
+  /** Unread per room after this request; the room being viewed is always 0. */
+  unread: Record<"FAMILY" | "DIRECT", number>;
 }
 
 export interface FamilyLink {
@@ -488,6 +536,7 @@ export interface AdminTranscriptMessage {
   senderId: string;
   senderName: string;
   senderRole: "SENDER" | "RECEIVER" | "MAHRAM" | "OTHER";
+  channel: "FAMILY" | "DIRECT";
   text: string;
   createdAt: string;
 }

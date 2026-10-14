@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { STALE_CONNECTION_DAYS } from "../../src/lib/contracts.js";
+import { PASS_COOLDOWN_DAYS, STALE_CONNECTION_DAYS } from "../../src/lib/contracts.js";
 import type { Database } from "../db.js";
 import { asString, rowsOf } from "../rows.js";
 
@@ -7,6 +7,7 @@ export interface CleanupResult {
   terminatedConnectionIds: string[];
   liftedSuspensionUserIds: string[];
   purgedRateLimitRows: number;
+  purgedExpiredPasses: number;
   ranAt: string;
 }
 
@@ -61,10 +62,19 @@ export async function cleanupStaleConnections(db: Database): Promise<CleanupResu
     await db.execute(sql`DELETE FROM rate_limits WHERE window_start < now() - interval '2 days' RETURNING key`),
   ).length;
 
+  // Passes only hide a profile for the cooling-off period; older rows are dead weight.
+  const expiredPasses = rowsOf(
+    await db.execute(sql`
+      DELETE FROM profile_reactions
+       WHERE kind = 'PASSED' AND created_at < now() - make_interval(days => ${PASS_COOLDOWN_DAYS}::int)
+      RETURNING target_id`),
+  ).length;
+
   return {
     terminatedConnectionIds: terminated,
     liftedSuspensionUserIds: lifted,
     purgedRateLimitRows: purged,
+    purgedExpiredPasses: expiredPasses,
     ranAt: new Date().toISOString(),
   };
 }

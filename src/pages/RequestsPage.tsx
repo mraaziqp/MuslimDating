@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Send } from "lucide-react";
 import { ConnectionCard } from "../components/connections/ConnectionCard";
+import { MatchDialog } from "../components/connections/MatchDialog";
 import { EmptyState, ErrorState, PageHeader, PageLoader } from "../components/shared/PageState";
 import { buttonVariants } from "../components/ui/button";
 import { useAsync, usePolling } from "../hooks/useAsync";
+import { announceActivityChanged } from "../lib/activity";
 import { api } from "../lib/api";
 import type { ConnectionView } from "../lib/contracts";
 
@@ -33,6 +36,7 @@ function Section({
 
 export function RequestsPage() {
   const connections = useAsync(() => api.connections(), []);
+  const [opened, setOpened] = useState<ConnectionView | null>(null);
   usePolling(() => void connections.reload({ silent: true }), 20_000);
 
   if (connections.loading && !connections.data) return <PageLoader />;
@@ -41,8 +45,12 @@ export function RequestsPage() {
   }
 
   const mine = connections.data.filter((c) => c.perspective === "SENDER" || c.perspective === "RECEIVER");
-  const replace = (next: ConnectionView) =>
+  const replace = (next: ConnectionView) => {
+    const before = connections.data?.find((c) => c.id === next.id);
+    if (next.status === "APPROVED" && before && before.status !== "APPROVED") setOpened(next);
+    announceActivityChanged();
     connections.setData((prev) => (prev ? prev.map((c) => (c.id === next.id ? next : c)) : prev));
+  };
 
   const needsYou = mine.filter((c) => c.canAccept || c.canDecline);
   const waiting = mine.filter(
@@ -63,8 +71,8 @@ export function RequestsPage() {
           title="No requests yet"
           description="When you send or receive a connection request it will appear here with its approval progress."
           action={
-            <Link to="/feed" className={buttonVariants({ variant: "outline" })}>
-              Browse today's introductions
+            <Link to="/discover" className={buttonVariants({ variant: "outline" })}>
+              Discover today's picks
             </Link>
           }
         />
@@ -76,6 +84,7 @@ export function RequestsPage() {
           <Section title="Past" views={past} onChange={replace} />
         </>
       )}
+      <MatchDialog view={opened} onClose={() => setOpened(null)} />
     </div>
   );
 }

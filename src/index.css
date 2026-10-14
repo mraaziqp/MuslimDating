@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./ui-variants.css";
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
@@ -117,6 +117,32 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+/*
+ * App chrome sizes, shared by the navigation bars and every full-height screen
+ * (the card deck, the chat room) so they always agree on how much room is left.
+ */
+:root {
+    --nav-h: 3.5rem;
+    /* Height of the mobile tab bar; zero from the lg breakpoint, where it is hidden. */
+    --tabbar-h: 3.75rem;
+    /* Breathing room under the last element of a page. */
+    --page-pb: 1.25rem;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (min-width: 40rem) {
+    :root {
+        --nav-h: 4rem;
+    }
+}
+
+@media (min-width: 64rem) {
+    :root {
+        --tabbar-h: 0rem;
+        --page-pb: 3rem;
+    }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -124,10 +150,23 @@
   body {
     @apply bg-background text-foreground overflow-x-hidden;
     -webkit-tap-highlight-color: transparent;
+    /* Keep content clear of the notch when the phone is held sideways. */
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
     }
   html {
     @apply font-sans;
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+    }
+  /* No double-tap-to-zoom delay on controls. */
+  a, button, input, select, textarea, label, [role="tab"], [role="switch"] {
+    touch-action: manipulation;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
     }
 }

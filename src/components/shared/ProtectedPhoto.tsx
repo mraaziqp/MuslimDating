@@ -14,6 +14,8 @@ interface ProtectedPhotoProps {
   showLock?: boolean;
   /** Changes when the photo is replaced so the image re-fetches. */
   version?: string | number;
+  /** Sizing for the initials shown when there is no image (large hero placements). */
+  initialsClassName?: string;
 }
 
 /**
@@ -21,7 +23,15 @@ interface ProtectedPhotoProps {
  * returned. BLUR only ever receives a ~24px thumbnail, so there is nothing to
  * "unblur" client-side.
  */
-export function ProtectedPhoto({ userId, name, access, className, showLock = true, version }: ProtectedPhotoProps) {
+export function ProtectedPhoto({
+  userId,
+  name,
+  access,
+  className,
+  showLock = true,
+  version,
+  initialsClassName,
+}: ProtectedPhotoProps) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,16 +72,16 @@ export function ProtectedPhoto({ userId, name, access, className, showLock = tru
           className={cn("size-full object-cover", access === "BLUR" && "scale-125 blur-xl saturate-50")}
         />
       ) : (
-        <span className="text-lg font-semibold text-white/85" aria-hidden>
+        <span className={cn("text-lg font-semibold text-white/85", initialsClassName)} aria-hidden>
           {initials(name)}
         </span>
       )}
       {showLock && access !== "FULL" && (
         <span
-          className="absolute right-1 bottom-1 flex size-5 items-center justify-center rounded-full bg-black/40 text-white"
+          className="absolute right-0.5 bottom-0.5 flex size-4 items-center justify-center rounded-full bg-black/50 text-white"
           title="Photo stays private until mutual consent"
         >
-          <Lock className="size-3" aria-hidden />
+          <Lock className="size-2.5" aria-hidden />
           <span className="sr-only">Photo private</span>
         </span>
       )}

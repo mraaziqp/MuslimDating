@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { searchSeekers, createConnection } from "../server/actions/matchmaking.js";
+import { searchSeekers } from "../server/actions/discovery.js";
+import { createConnection } from "../server/actions/matchmaking.js";
 import type { DatabaseHandle } from "../server/db.js";
 import { makeUser, setupDatabase, linkFamily } from "./helpers.js";
 

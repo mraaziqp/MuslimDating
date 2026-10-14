@@ -1,5 +1,6 @@
 import type {
   AccountActionInput,
+  ActivitySummary,
   AdminConnectionRow,
   AdminConnectionsQuery,
   AdminTranscript,
@@ -25,10 +26,13 @@ import type {
   Paginated,
   PhotoUploadInput,
   ProfileUpdateInput,
+  ReactionKind,
+  ReactionResult,
   ReadinessResult,
   RegisterInput,
   ReportInput,
   ReportUpdateInput,
+  SavedProfilesResponse,
   SeekerSearchQuery,
   SeekerSearchResponse,
   SelfUser,
@@ -155,6 +159,7 @@ export const api = {
   firebaseSignIn: (idToken: string) => request<SelfUser>("POST", "/api/auth/firebase", undefined, { token: idToken }),
 
   me: () => request<SelfUser>("GET", "/api/me"),
+  summary: () => request<ActivitySummary>("GET", "/api/me/summary"),
   completeOnboarding: (input: OnboardingInput) => request<SelfUser>("POST", "/api/me/onboarding", input),
   updateProfile: (input: ProfileUpdateInput) => request<SelfUser>("PATCH", "/api/me/profile", input),
   uploadPhoto: (input: PhotoUploadInput) => request<SelfUser>("PUT", "/api/me/photo", input, { timeoutMs: 60_000 }),
@@ -166,6 +171,13 @@ export const api = {
   feed: () => request<FeedResponse>("GET", "/api/feed"),
   searchSeekers: (query: Partial<SeekerSearchQuery> = {}) =>
     request<SeekerSearchResponse>("GET", `/api/seekers/search${queryString(query)}`),
+  savedProfiles: () => request<SavedProfilesResponse>("GET", "/api/seekers/saved"),
+  react: (targetId: string, kind: ReactionKind) =>
+    request<ReactionResult>("PUT", `/api/seekers/${targetId}/reaction`, { kind }),
+  clearReaction: (targetId: string) => request<void>("DELETE", `/api/seekers/${targetId}/reaction`),
+  saveNote: (targetId: string, note: string | null) =>
+    request<{ targetId: string; note: string | null }>("PUT", `/api/seekers/${targetId}/note`, { note }),
+  resetPasses: () => request<{ restored: number }>("DELETE", "/api/seekers/passes"),
   connections: () => request<ConnectionView[]>("GET", "/api/connections"),
   requestConnection: (receiverId: string) => request<ConnectionView>("POST", "/api/connections", { receiverId }),
   decide: (id: string, input: ConnectionDecisionInput) =>

@@ -1,9 +1,9 @@
-import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { X } from "lucide-react";
 import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 import { LandingPage } from "./components/LandingPage";
-import { Navbar } from "./components/layout/Navbar";
+import { Navbar, isImmersiveRoute } from "./components/layout/Navbar";
 import { AdminProtectedRoute } from "./components/routing/AdminProtectedRoute";
 import { RequireAuth, RequireRole } from "./components/routing/RouteGuards";
 import { PageLoader } from "./components/shared/PageState";
@@ -14,8 +14,7 @@ const named = <K extends string>(loader: () => Promise<Record<K, React.Component
   lazy(() => loader().then((m) => ({ default: m[name] })));
 
 const OnboardingPage = named(() => import("./pages/OnboardingPage"), "OnboardingPage");
-const SeekerFeedPage = named(() => import("./pages/SeekerFeedPage"), "SeekerFeedPage");
-const SearchPage = named(() => import("./pages/SearchPage"), "SearchPage");
+const DiscoverPage = named(() => import("./pages/DiscoverPage"), "DiscoverPage");
 const RequestsPage = named(() => import("./pages/RequestsPage"), "RequestsPage");
 const ParentDashboardPage = named(() => import("./pages/ParentDashboardPage"), "ParentDashboardPage");
 const FamilyPage = named(() => import("./pages/FamilyPage"), "FamilyPage");
@@ -41,6 +40,39 @@ function BlockedBanner() {
   );
 }
 
+/**
+ * Leaves room for the mobile tab bar (except on full-height screens that hide
+ * it), starts every page at the top, and eases each new page in.
+ */
+function Main({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const { user } = useAuth();
+  const immersive = isImmersiveRoute(pathname);
+  const hasTabBar = user?.onboardingCompleted === true && !immersive;
+
+  // The browser keeps the scroll position across client-side navigation; a new page should start at its top.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pathname]);
+
+  return (
+    <main
+      className={
+        immersive
+          ? undefined
+          : hasTabBar
+            ? "pb-[calc(var(--tabbar-h)+var(--safe-bottom)+var(--page-pb))]"
+            : "pb-(--page-pb)"
+      }
+    >
+      {/* Keyed by path, so switching a tab or filter inside a page does not replay the transition. */}
+      <div key={pathname} className="animate-in duration-300 fade-in-0 motion-reduce:animate-none">
+        {children}
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -49,7 +81,7 @@ export default function App() {
           <div className="min-h-screen bg-slate-50 font-sans antialiased">
             <Navbar />
             <BlockedBanner />
-            <main className="pb-12">
+            <Main>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
@@ -57,21 +89,16 @@ export default function App() {
                   <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
                   <Route
-                    path="/feed"
+                    path="/discover"
                     element={
                       <RequireRole roles={["SOLO", "DEPENDENT", "ADMIN"]}>
-                        <SeekerFeedPage />
+                        <DiscoverPage />
                       </RequireRole>
                     }
                   />
-                  <Route
-                    path="/search"
-                    element={
-                      <RequireRole roles={["SOLO", "DEPENDENT", "ADMIN"]}>
-                        <SearchPage />
-                      </RequireRole>
-                    }
-                  />
+                  {/* Former addresses of the daily batch and the search page. */}
+                  <Route path="/feed" element={<Navigate to="/discover" replace />} />
+                  <Route path="/search" element={<Navigate to="/discover?tab=browse" replace />} />
                   <Route
                     path="/requests"
                     element={
@@ -147,7 +174,7 @@ export default function App() {
                   <Route path="*" element={<NotFoundPage />} />
                 </Routes>
               </Suspense>
-            </main>
+            </Main>
             <Toaster position="top-center" richColors />
           </div>
         </BrowserRouter>

@@ -53,6 +53,7 @@ export function ConnectionCard({ view, onChange, expanded = false }: ConnectionC
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<"decline" | "withdraw" | null>(null);
   const [reporting, setReporting] = useState(false);
+  const isParty = view.perspective === "SENDER" || view.perspective === "RECEIVER";
 
   const approve = async () => {
     setBusy(true);
@@ -62,7 +63,9 @@ export function ConnectionCard({ view, onChange, expanded = false }: ConnectionC
         mahramId: willComplete && mahramId ? mahramId : undefined,
       });
       onChange(next);
-      toast.success(next.status === "APPROVED" ? "Approved — the chaperoned chat is now open." : "Approval recorded.");
+      // For the two members themselves the page celebrates the opened chat (see MatchDialog).
+      if (next.status !== "APPROVED") toast.success("Approval recorded.");
+      else if (!isParty) toast.success("Approved — the chaperoned chat is now open.");
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -92,10 +95,16 @@ export function ConnectionCard({ view, onChange, expanded = false }: ConnectionC
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:p-5">
-        <ProtectedPhoto userId={other.id} name={other.displayName} access={other.photoAccess} className="size-20 shrink-0 rounded-2xl" />
+      {/* Phones: a two-column grid whose first row is avatar + name; everything after spans both columns. */}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 p-4 sm:flex sm:items-start sm:gap-4 sm:p-5">
+        <ProtectedPhoto
+          userId={other.id}
+          name={other.displayName}
+          access={other.photoAccess}
+          className="size-14 shrink-0 rounded-2xl sm:size-20"
+        />
 
-        <div className="min-w-0 flex-1 space-y-3">
+        <div className="min-w-0 max-sm:contents max-sm:[&>*:not(:first-child)]:col-span-2 sm:flex-1 sm:space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 className="truncate text-lg font-bold text-slate-900">
@@ -188,7 +197,7 @@ export function ConnectionCard({ view, onChange, expanded = false }: ConnectionC
                 <Undo2 /> Withdraw
               </Button>
             )}
-            {view.status === "APPROVED" && (view.perspective === "SENDER" || view.perspective === "RECEIVER") && (
+            {view.status === "APPROVED" && isParty && (
               <Link to={`/chat/${view.id}`} className={cn(buttonVariants(), "bg-rose-600 text-white hover:bg-rose-700")}>
                 <MessageSquare /> Open chat
               </Link>

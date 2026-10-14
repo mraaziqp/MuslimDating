@@ -14,12 +14,14 @@ import {
   photoConsentSchema,
   photoUploadSchema,
   profileUpdateSchema,
+  reactionSchema,
   readinessSubmissionSchema,
   redeemInviteSchema,
   registerSchema,
   removePhotoSchema,
   reportSchema,
   reportUpdateSchema,
+  savedNoteSchema,
   seekerSearchQuerySchema,
   sendMessageSchema,
   terminateConnectionSchema,
@@ -30,13 +32,21 @@ import * as admin from "./actions/admin.js";
 import { getConversationTranscript, getUserDetail, listAllConnections } from "./actions/admin-oversight.js";
 import { getChat, sendMessage } from "./actions/chat.js";
 import { cleanupStaleConnections } from "./actions/cron.js";
+import {
+  clearReaction,
+  getFeed,
+  listSavedProfiles,
+  resetPasses,
+  searchSeekers,
+  setReaction,
+  setSavedNote,
+} from "./actions/discovery.js";
 import { createInvite, getFamilyOverview, redeemInvite, removeLink, revokeInvite } from "./actions/family.js";
 import {
   createConnection,
   decideConnection,
-  getFeed,
+  getActivitySummary,
   listConnections,
-  searchSeekers,
   setPhotoConsent,
   terminateConnection,
   withdrawConnection,
@@ -84,7 +94,14 @@ export function createApp(): express.Express {
     res.setHeader("Cache-Control", "no-store");
     next();
   });
-  app.use(express.json({ limit: "3mb" }));
+  // Vercel hands over an already-parsed body (api/index.ts flags it); parsing again would
+  // wait on a request stream that has been drained. Older body-parser versions honoured
+  // this flag themselves; doing it here keeps the behaviour the same on every version.
+  const parseJson = express.json({ limit: "3mb" });
+  app.use((req: Request & { _body?: boolean }, res, next) => {
+    if (req._body) next();
+    else parseJson(req, res, next);
+  });
 
   const authed = [requireAuth];
   const member = [requireAuth, requireOnboarded];
@@ -141,6 +158,7 @@ export function createApp(): express.Express {
 
   // ── Current user ──────────────────────────────────────────────────────────
   app.get("/api/me", ...authed, route(async (req) => getSelf(await getDb(), actor(req).id)));
+  app.get("/api/me/summary", ...member, route(async (req) => getActivitySummary(await getDb(), actor(req))));
 
   app.post(
     "/api/me/onboarding",
@@ -215,6 +233,27 @@ export function createApp(): express.Express {
       const query = parseInput(seekerSearchQuerySchema, req.query);
       return searchSeekers(await getDb(), actor(req), query);
     }),
+  );
+  app.get("/api/seekers/saved", ...member, route(async (req) => listSavedProfiles(await getDb(), actor(req))));
+  app.delete("/api/seekers/passes", ...member, route(async (req) => resetPasses(await getDb(), actor(req))));
+  app.put(
+    "/api/seekers/:id/reaction",
+    ...member,
+    route(async (req) =>
+      setReaction(await getDb(), actor(req), uuidParam(req.params.id, "member id"), parseInput(reactionSchema, req.body).kind),
+    ),
+  );
+  app.put(
+    "/api/seekers/:id/note",
+    ...member,
+    route(async (req) =>
+      setSavedNote(await getDb(), actor(req), uuidParam(req.params.id, "member id"), parseInput(savedNoteSchema, req.body).note),
+    ),
+  );
+  app.delete(
+    "/api/seekers/:id/reaction",
+    ...member,
+    route(async (req) => clearReaction(await getDb(), actor(req), uuidParam(req.params.id, "member id"))),
   );
   app.get("/api/connections", ...member, route(async (req) => listConnections(await getDb(), actor(req))));
 

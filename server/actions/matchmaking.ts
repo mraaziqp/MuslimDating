@@ -16,23 +16,21 @@
  *   • APPROVED requires a mahram and neither party may exceed 3 APPROVED chats (trigger)
  * Every transition is an optimistic-concurrency UPDATE guarded by `version`.
  */
-import { and, count, desc, eq, gte, ilike, inArray, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import {
   MAX_ACTIVE_CHATS,
   MAX_PENDING_OUTGOING,
-  SEEKER_ROLES,
+  type ActivitySummary,
   type ConnectionDecisionInput,
   type ConnectionPerspective,
   type ConnectionView,
-  type FeedResponse,
   type PersonBrief,
-  type SeekerSearchQuery,
-  type SeekerSearchResponse,
 } from "../../src/lib/contracts.js";
 import {
   connections,
   parentChildLinks,
   profilePhotos,
+  profileReactions,
   reports,
   users,
   type Connection,
@@ -45,8 +43,9 @@ import type { Database } from "../db.js";
 import { AppError, errors, translateDatabaseError } from "../http.js";
 import { photoAccessFor, requiresGuardian, toBrief, toPublicProfile } from "../presenters.js";
 import { enforceRateLimit } from "../rate-limit.js";
-import { rowsOf } from "../rows.js";
+import { asNumber, rowsOf } from "../rows.js";
 import { cleanupStaleConnections } from "./cron.js";
+import { countAllUnread, totalUnread, unreadByConnection } from "./unread.js";
 
 const PENDING_STATUSES: ConnectionStatus[] = ["PENDING_MALE_PARENT", "PENDING_FEMALE_PARENT"];
 const LIVE_STATUSES: ConnectionStatus[] = [...PENDING_STATUSES, "APPROVED"];
@@ -138,7 +137,13 @@ export function mahramOptions(conn: Connection, ctx: HydrationContext): PersonBr
   return options;
 }
 
-function buildView(actor: User, conn: Connection, perspective: ConnectionPerspective, ctx: HydrationContext): ConnectionView {
+function buildView(
+  actor: User,
+  conn: Connection,
+  perspective: ConnectionPerspective,
+  ctx: HydrationContext,
+  unreadCount: number,
+): ConnectionView {
   const sender = person(ctx, conn.senderId);
   const receiver = person(ctx, conn.receiverId);
   const receiverNeedsGuardian = requiresGuardian(receiver.user);
@@ -205,6 +210,7 @@ function buildView(actor: User, conn: Connection, perspective: ConnectionPerspec
     closedReason: conn.closedReason,
     lastActivityAt: conn.lastActivityAt.toISOString(),
     inactiveDays: Math.floor((Date.now() - conn.lastActivityAt.getTime()) / DAY_MS),
+    unreadCount,
     createdAt: conn.createdAt.toISOString(),
     updatedAt: conn.updatedAt.toISOString(),
   };
@@ -222,13 +228,25 @@ interface ResolvedConnection {
   view: ConnectionView;
 }
 
-/** Loads a connection the actor is allowed to see, or 404s. */
-export async function resolveConnection(db: Database, actor: User, id: string): Promise<ResolvedConnection> {
+/**
+ * Loads a connection the actor is allowed to see, or 404s.
+ * `unread: false` skips the unread count (the chat endpoint computes its own after marking the room read).
+ */
+export async function resolveConnection(
+  db: Database,
+  actor: User,
+  id: string,
+  options: { unread?: boolean } = {},
+): Promise<ResolvedConnection> {
   const conn = await findConnection(db, id);
   const ctx = await hydrate(db, [conn]);
   const perspective = perspectiveOf(actor.id, conn, ctx);
   if (!isVisible(perspective, conn)) throw errors.notFound("Connection not found.");
-  return { conn, ctx, view: buildView(actor, conn, perspective, ctx) };
+  const unread =
+    options.unread === false || conn.status !== "APPROVED"
+      ? 0
+      : totalUnread((await unreadByConnection(db, actor, [conn.id])).get(conn.id));
+  return { conn, ctx, view: buildView(actor, conn, perspective, ctx, unread) };
 }
 
 async function transition(
@@ -258,11 +276,11 @@ async function presentOne(db: Database, actor: User, id: string): Promise<Connec
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
-function isSeeker(user: User): boolean {
+export function isSeeker(user: User): boolean {
   return user.role === "SOLO" || user.role === "DEPENDENT";
 }
 
-async function activeChatCount(db: Database, userId: string): Promise<number> {
+export async function activeChatCount(db: Database, userId: string): Promise<number> {
   const [row] = await db
     .select({ n: count() })
     .from(connections)
@@ -270,7 +288,7 @@ async function activeChatCount(db: Database, userId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-async function pendingOutgoingCount(db: Database, userId: string): Promise<number> {
+export async function pendingOutgoingCount(db: Database, userId: string): Promise<number> {
   const [row] = await db
     .select({ n: count() })
     .from(connections)
@@ -278,7 +296,7 @@ async function pendingOutgoingCount(db: Database, userId: string): Promise<numbe
   return row?.n ?? 0;
 }
 
-async function hasWaliLink(db: Database, childId: string): Promise<boolean> {
+export async function hasWaliLink(db: Database, childId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: parentChildLinks.id })
     .from(parentChildLinks)
@@ -287,241 +305,63 @@ async function hasWaliLink(db: Database, childId: string): Promise<boolean> {
   return row !== undefined;
 }
 
-/** Daily curated batch: up to 5 eligible, opposite-gender, readiness-certified seekers. */
-export async function getFeed(db: Database, viewer: User): Promise<FeedResponse> {
-  const [activeChats, pendingOutgoing, waliLinked] = await Promise.all([
-    activeChatCount(db, viewer.id),
-    pendingOutgoingCount(db, viewer.id),
-    hasWaliLink(db, viewer.id),
-  ]);
-  const isAdmin = viewer.role === "ADMIN";
-  const gate = {
-    readinessCompleted: isAdmin ? true : viewer.readinessCompleted,
-    needsWali: isAdmin ? false : requiresGuardian(viewer) && !waliLinked,
-    activeChats,
-    pendingOutgoing,
-    maxActiveChats: MAX_ACTIVE_CHATS,
-    maxPendingOutgoing: MAX_PENDING_OUTGOING,
-  };
-  if (!isSeeker(viewer) && !isAdmin) return { profiles: [], gate };
-
-  const conditions: SQL[] = [
-    inArray(users.role, [...SEEKER_ROLES]),
-    eq(users.accountStatus, "ACTIVE"),
-    eq(users.onboardingCompleted, true),
-    eq(users.readinessCompleted, true),
-    ne(users.id, viewer.id),
-    sql`(NOT (${users.role} = 'DEPENDENT' OR ${users.requiresParentalVetting})
-         OR EXISTS (SELECT 1 FROM parent_child_links l WHERE l.child_id = ${users.id} AND l.kind = 'WALI'))`,
-    sql`(SELECT count(*) FROM connections c2
-          WHERE c2.status = 'APPROVED' AND (c2.sender_id = ${users.id} OR c2.receiver_id = ${users.id})) < ${MAX_ACTIVE_CHATS}`,
-  ];
-
-  if (!isAdmin) {
-    if (!viewer.gender) return { profiles: [], gate };
-    const opposite = viewer.gender === "male" ? "female" : "male";
-    conditions.push(
-      eq(users.gender, opposite),
-      sql`NOT EXISTS (
-        SELECT 1 FROM connections c
-         WHERE c.status <> 'TERMINATED'
-           AND LEAST(c.sender_id, c.receiver_id) = LEAST(${users.id}, ${viewer.id}::uuid)
-           AND GREATEST(c.sender_id, c.receiver_id) = GREATEST(${users.id}, ${viewer.id}::uuid))`,
-      sql`NOT EXISTS (
-        SELECT 1 FROM reports r
-         WHERE (r.reporter_id = ${viewer.id}::uuid AND r.reported_id = ${users.id})
-            OR (r.reporter_id = ${users.id} AND r.reported_id = ${viewer.id}::uuid))`,
-    );
-  }
-
-  const rows = await db
-    .select({ user: users, photoUserId: profilePhotos.userId })
-    .from(users)
-    .leftJoin(profilePhotos, eq(profilePhotos.userId, users.id))
-    .where(and(...conditions))
-    .orderBy(sql`md5(${users.id}::text || ${viewer.id}::text || current_date::text)`)
-    .limit(5);
-
+/**
+ * Counts for the navigation badges. Mirrors the `canAccept` / `canGuardianDecide`
+ * rules in `buildView`, as one cheap query instead of hydrating every connection.
+ */
+export async function getActivitySummary(db: Database, actor: User): Promise<ActivitySummary> {
+  const [row] = rowsOf(
+    await db.execute(sql`
+      SELECT
+        (SELECT count(*) FROM connections c
+          WHERE c.status = 'PENDING_FEMALE_PARENT'
+            AND c.receiver_id = ${actor.id}::uuid
+            AND c.receiver_accepted_at IS NULL)
+        + (SELECT count(*) FROM connections c
+            JOIN parent_child_links l
+              ON l.parent_id = ${actor.id}::uuid AND l.kind = 'WALI' AND l.child_id = c.sender_id
+           WHERE c.status = 'PENDING_MALE_PARENT')
+        + (SELECT count(*) FROM connections c
+            JOIN parent_child_links l
+              ON l.parent_id = ${actor.id}::uuid AND l.kind = 'WALI' AND l.child_id = c.receiver_id
+            JOIN users r ON r.id = c.receiver_id
+           WHERE c.status = 'PENDING_FEMALE_PARENT'
+             AND c.receiver_guardian_approved_at IS NULL
+             AND (r.role = 'DEPENDENT' OR r.requires_parental_vetting)) AS needs_response,
+        (SELECT count(*) FROM connections c
+          WHERE c.status = 'APPROVED'
+            AND (c.sender_id = ${actor.id}::uuid OR c.receiver_id = ${actor.id}::uuid OR c.mahram_id = ${actor.id}::uuid))
+          AS active_chats,
+        (SELECT count(*) FROM connections c
+          WHERE c.sender_id = ${actor.id}::uuid
+            AND c.status IN ('PENDING_MALE_PARENT', 'PENDING_FEMALE_PARENT')) AS pending_outgoing`),
+  );
   return {
-    gate,
-    profiles: rows.map((r) =>
-      toPublicProfile(
-        r.user,
-        photoAccessFor({
-          viewer,
-          owner: r.user,
-          ownerHasPhoto: r.photoUserId !== null,
-          viewerIsGuardianOfOwner: false,
-          approvedConnection: null,
-        }),
-      ),
-    ),
+    needsResponse: asNumber(row?.needs_response),
+    activeChats: asNumber(row?.active_chats),
+    pendingOutgoing: asNumber(row?.pending_outgoing),
+    unreadMessages: await countAllUnread(db, actor),
   };
 }
 
-/** Full halal search and exploration with granular filters, pagination, and Islamic privacy enforcement. */
-export async function searchSeekers(
-  db: Database,
-  viewer: User,
-  query: SeekerSearchQuery,
-): Promise<SeekerSearchResponse> {
-  const [activeChats, pendingOutgoing, waliLinked] = await Promise.all([
-    activeChatCount(db, viewer.id),
-    pendingOutgoingCount(db, viewer.id),
-    hasWaliLink(db, viewer.id),
-  ]);
-  const isAdmin = viewer.role === "ADMIN";
-  const gate = {
-    readinessCompleted: isAdmin ? true : viewer.readinessCompleted,
-    needsWali: isAdmin ? false : requiresGuardian(viewer) && !waliLinked,
-    activeChats,
-    pendingOutgoing,
-    maxActiveChats: MAX_ACTIVE_CHATS,
-    maxPendingOutgoing: MAX_PENDING_OUTGOING,
-  };
-  const emptyResponse: SeekerSearchResponse = {
-    profiles: [],
-    total: 0,
-    page: query.page,
-    pageSize: query.pageSize,
-    totalPages: 0,
-    gate,
-  };
+/**
+ * The connections list is polled by every open tab, and the inactivity sweep is four
+ * statements. Running it on a short timer keeps chats closing promptly between the
+ * daily cron runs without paying for it on every poll. Tracked per database handle,
+ * so separate databases (tests) never share a timer.
+ */
+const SWEEP_INTERVAL_MS = 60_000;
+const lastSweep = new WeakMap<Database, number>();
 
-  if (!isSeeker(viewer) && !isAdmin) return emptyResponse;
-
-  const conditions: SQL[] = [
-    inArray(users.role, [...SEEKER_ROLES]),
-    eq(users.accountStatus, "ACTIVE"),
-    eq(users.onboardingCompleted, true),
-    eq(users.readinessCompleted, true),
-    ne(users.id, viewer.id),
-    sql`(NOT (${users.role} = 'DEPENDENT' OR ${users.requiresParentalVetting})
-         OR EXISTS (SELECT 1 FROM parent_child_links l WHERE l.child_id = ${users.id} AND l.kind = 'WALI'))`,
-    sql`(SELECT count(*) FROM connections c2
-          WHERE c2.status = 'APPROVED' AND (c2.sender_id = ${users.id} OR c2.receiver_id = ${users.id})) < ${MAX_ACTIVE_CHATS}`,
-  ];
-
-  if (query.gender) {
-    conditions.push(eq(users.gender, query.gender));
-  } else if (!isAdmin) {
-    if (!viewer.gender) return emptyResponse;
-    const opposite = viewer.gender === "male" ? "female" : "male";
-    conditions.push(eq(users.gender, opposite));
-  }
-
-  if (!isAdmin) {
-    conditions.push(
-      sql`NOT EXISTS (
-        SELECT 1 FROM connections c
-         WHERE c.status <> 'TERMINATED'
-           AND LEAST(c.sender_id, c.receiver_id) = LEAST(${users.id}, ${viewer.id}::uuid)
-           AND GREATEST(c.sender_id, c.receiver_id) = GREATEST(${users.id}, ${viewer.id}::uuid))`,
-      sql`NOT EXISTS (
-        SELECT 1 FROM reports r
-         WHERE (r.reporter_id = ${viewer.id}::uuid AND r.reported_id = ${users.id})
-            OR (r.reporter_id = ${users.id} AND r.reported_id = ${viewer.id}::uuid))`,
-    );
-  }
-
-  if (query.q) {
-    const pattern = `%${query.q.trim()}%`;
-    conditions.push(
-      or(
-        ilike(users.displayName, pattern),
-        ilike(users.location, pattern),
-        ilike(users.profession, pattern),
-        ilike(users.bio, pattern),
-      )!,
-    );
-  }
-
-  if (query.minAge !== undefined) {
-    conditions.push(gte(users.age, query.minAge));
-  }
-  if (query.maxAge !== undefined) {
-    conditions.push(lte(users.age, query.maxAge));
-  }
-  if (query.location) {
-    conditions.push(ilike(users.location, `%${query.location.trim()}%`));
-  }
-  if (query.prayerFrequency) {
-    conditions.push(eq(users.prayerFrequency, query.prayerFrequency));
-  }
-  if (query.dietaryHabits) {
-    conditions.push(eq(users.dietaryHabits, query.dietaryHabits));
-  }
-  if (query.maritalStatus) {
-    conditions.push(eq(users.maritalStatus, query.maritalStatus));
-  }
-  if (query.education) {
-    conditions.push(eq(users.education, query.education));
-  }
-  if (query.waliInvolved === true) {
-    conditions.push(or(eq(users.role, "DEPENDENT"), eq(users.requiresParentalVetting, true))!);
-  } else if (query.waliInvolved === false) {
-    conditions.push(and(eq(users.role, "SOLO"), eq(users.requiresParentalVetting, false))!);
-  }
-
-  const whereClause = and(...conditions);
-
-  const [countRow] = await db
-    .select({ n: count() })
-    .from(users)
-    .where(whereClause);
-  const total = countRow?.n ?? 0;
-  const totalPages = Math.ceil(total / query.pageSize);
-
-  let sortExpr: SQL;
-  switch (query.sortBy) {
-    case "age_asc":
-      sortExpr = sql`${users.age} ASC NULLS LAST`;
-      break;
-    case "age_desc":
-      sortExpr = sql`${users.age} DESC NULLS LAST`;
-      break;
-    case "readiness":
-      sortExpr = sql`cardinality(${users.completedModules}) DESC, ${users.createdAt} DESC`;
-      break;
-    case "recent":
-    default:
-      sortExpr = desc(users.createdAt);
-      break;
-  }
-
-  const offset = (query.page - 1) * query.pageSize;
-  const rows = await db
-    .select({ user: users, photoUserId: profilePhotos.userId })
-    .from(users)
-    .leftJoin(profilePhotos, eq(profilePhotos.userId, users.id))
-    .where(whereClause)
-    .orderBy(sortExpr)
-    .limit(query.pageSize)
-    .offset(offset);
-
-  return {
-    gate,
-    total,
-    page: query.page,
-    pageSize: query.pageSize,
-    totalPages,
-    profiles: rows.map((r) =>
-      toPublicProfile(
-        r.user,
-        photoAccessFor({
-          viewer,
-          owner: r.user,
-          ownerHasPhoto: r.photoUserId !== null,
-          viewerIsGuardianOfOwner: false,
-          approvedConnection: null,
-        }),
-      ),
-    ),
-  };
+async function sweepStaleConnectionsIfDue(db: Database): Promise<void> {
+  const now = Date.now();
+  if (now - (lastSweep.get(db) ?? 0) < SWEEP_INTERVAL_MS) return;
+  lastSweep.set(db, now);
+  await cleanupStaleConnections(db);
 }
 
 export async function listConnections(db: Database, actor: User): Promise<ConnectionView[]> {
-  await cleanupStaleConnections(db);
+  await sweepStaleConnectionsIfDue(db);
   const waliOf = await db
     .select({ childId: parentChildLinks.childId })
     .from(parentChildLinks)
@@ -550,10 +390,15 @@ export async function listConnections(db: Database, actor: User): Promise<Connec
     .limit(150);
 
   const ctx = await hydrate(db, conns);
+  const unread = await unreadByConnection(
+    db,
+    actor,
+    conns.filter((c) => c.status === "APPROVED").map((c) => c.id),
+  );
   const views: ConnectionView[] = [];
   for (const conn of conns) {
     const perspective = perspectiveOf(actor.id, conn, ctx);
-    if (isVisible(perspective, conn)) views.push(buildView(actor, conn, perspective, ctx));
+    if (isVisible(perspective, conn)) views.push(buildView(actor, conn, perspective, ctx, totalUnread(unread.get(conn.id))));
   }
   return views;
 }
@@ -641,6 +486,11 @@ export async function createConnection(db: Database, sender: User, receiverId: s
   if (!insertedId) {
     throw errors.forbidden("Both members must have completed the Readiness Hub.", "READINESS_REQUIRED");
   }
+
+  // A requested profile leaves the shortlist; it now lives under Requests.
+  await db
+    .delete(profileReactions)
+    .where(and(eq(profileReactions.userId, sender.id), eq(profileReactions.targetId, receiver.id)));
 
   await recordAudit(db, {
     actorId: sender.id,

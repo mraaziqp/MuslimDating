@@ -10,6 +10,7 @@ import { api } from "../lib/api";
 import { MAX_ACTIVE_CHATS, STALE_CONNECTION_DAYS } from "../lib/constants";
 import type { ConnectionView } from "../lib/contracts";
 import { closedReasonLabel, counterpart } from "../lib/format";
+import { cn } from "../lib/utils";
 
 function ChatRow({ view }: { view: ConnectionView }) {
   const isMahram = view.perspective === "MAHRAM";
@@ -19,7 +20,7 @@ function ChatRow({ view }: { view: ConnectionView }) {
   return (
     <Link
       to={`/chat/${view.id}`}
-      className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-colors hover:bg-slate-50"
+      className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 shadow-sm transition-colors hover:bg-slate-50 active:bg-slate-100 sm:gap-4 sm:p-4"
     >
       {isMahram ? (
         <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
@@ -29,7 +30,7 @@ function ChatRow({ view }: { view: ConnectionView }) {
         <ProtectedPhoto userId={other.id} name={other.displayName} access={other.photoAccess} className="size-12 shrink-0 rounded-full" showLock={false} />
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-slate-900">
+        <p className={cn("truncate text-slate-900", view.unreadCount > 0 ? "font-bold" : "font-semibold")}>
           {isMahram ? `${view.sender.displayName} & ${view.receiver.displayName}` : other.displayName}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -48,8 +49,15 @@ function ChatRow({ view }: { view: ConnectionView }) {
           )}
         </div>
       </div>
-      <StatusBadge status={view.status} />
-      <ChevronRight className="size-5 text-slate-300" />
+      {view.unreadCount > 0 ? (
+        <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-bold text-white">
+          {view.unreadCount > 99 ? "99+" : view.unreadCount}
+          <span className="sr-only"> unread</span>
+        </span>
+      ) : (
+        <StatusBadge status={view.status} className="max-sm:hidden" />
+      )}
+      <ChevronRight className="size-5 shrink-0 text-slate-300" />
     </Link>
   );
 }

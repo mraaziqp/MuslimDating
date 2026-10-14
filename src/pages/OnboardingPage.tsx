@@ -28,6 +28,17 @@ const ROLE_OPTIONS: { value: SelectableRole; title: string; description: string 
   { value: "MAHRAM", title: "Mahram (Chaperone)", description: "I chaperone conversations for a family member." },
 ];
 
+/** Firebase reports sign-in failures as codes; these are the ones a member can act on. */
+const GOOGLE_SIGN_IN_ERRORS: Record<string, string> = {
+  "auth/unauthorized-domain":
+    "Google sign-in is not switched on for this web address yet. Please use your email and password instead.",
+  "auth/operation-not-allowed": "Google sign-in is not available right now. Please use your email and password instead.",
+  "auth/popup-blocked": "Your browser blocked the Google sign-in window. Allow pop-ups for this site, then try again.",
+  "auth/network-request-failed": "Could not reach Google. Check your connection and try again.",
+  "auth/too-many-requests": "Too many attempts. Please wait a few minutes and try again.",
+  "auth/user-disabled": "This Google account has been disabled.",
+};
+
 function redirectTarget(state: unknown): string | null {
   if (typeof state === "object" && state !== null && "from" in state && typeof state.from === "string") {
     return state.from.startsWith("/") && !state.from.startsWith("//") ? state.from : null;
@@ -83,7 +94,7 @@ function AuthCard() {
     } catch (err) {
       const code = typeof err === "object" && err !== null && "code" in err ? String(err.code) : "";
       if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
-        toast.error(errorMessage(err, "Google sign-in failed."));
+        toast.error(GOOGLE_SIGN_IN_ERRORS[code] ?? errorMessage(err, "Google sign-in failed."));
       }
     } finally {
       setBusy(false);
@@ -142,12 +153,12 @@ function AuthCard() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
-                className="pr-10"
+                className="pr-11"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute top-1/2 right-0.5 flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

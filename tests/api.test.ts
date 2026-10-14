@@ -119,6 +119,59 @@ describe("HTTP API security boundary", () => {
     expect((await call("/api/admin/users", { token })).status).toBe(403);
   });
 
+  it("serves discovery, saving and passing over HTTP", async () => {
+    const onboard = async (email: string, gender: "male" | "female") => {
+      const token = await register(email);
+      const body = { displayName: `Deck ${gender}`, gender, age: 29, role: "SOLO", requiresParentalVetting: false };
+      expect((await call("/api/me/onboarding", { method: "POST", token, body: JSON.stringify(body) })).status).toBe(200);
+      const quiz = await call("/api/readiness/intro", { method: "POST", token, body: JSON.stringify({ answers: [0, 1, 2, 3, 0] }) });
+      expect(quiz.body.passed).toBe(true);
+      return { token, id: String((await call("/api/me", { token })).body.id) };
+    };
+    const him = await onboard("deck-brother@test.local", "male");
+    const her = await onboard("deck-sister@test.local", "female");
+    const reaction = `/api/seekers/${her.id}/reaction`;
+    const put = (path: string, token: string | undefined, body: unknown) =>
+      call(path, { method: "PUT", token, body: JSON.stringify(body) });
+
+    expect((await put(reaction, undefined, { kind: "SAVED" })).status).toBe(401);
+    expect((await put(reaction, him.token, { kind: "LIKED" })).body.code).toBe("VALIDATION_FAILED");
+    expect((await put("/api/seekers/not-a-uuid/reaction", him.token, { kind: "SAVED" })).body.code).toBe("INVALID_ID");
+
+    const saved = await put(reaction, him.token, { kind: "SAVED" });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toEqual({ targetId: her.id, kind: "SAVED" });
+
+    const note = `/api/seekers/${her.id}/note`;
+    expect((await put(note, him.token, { note: "x".repeat(501) })).body.code).toBe("VALIDATION_FAILED");
+    expect((await put(note, her.token, { note: "Not saved by her" })).body.code).toBe("NOT_SAVED");
+    expect((await put(note, him.token, { note: "Speak to my father first" })).body).toEqual({
+      targetId: her.id,
+      note: "Speak to my father first",
+    });
+
+    const shortlist = await call("/api/seekers/saved", { token: him.token });
+    expect(shortlist.body.profiles).toMatchObject([{ id: her.id, saved: true, note: "Speak to my father first" }]);
+    // Her own shortlist is separate, and she is never told.
+    expect((await call("/api/seekers/saved", { token: her.token })).body.profiles).toEqual([]);
+
+    // A seeker cannot widen the search to their own gender.
+    const sameGender = await call("/api/seekers/search?gender=male", { token: him.token });
+    expect(sameGender.status).toBe(200);
+    expect((sameGender.body.profiles as { gender: string }[]).every((p) => p.gender === "female")).toBe(true);
+    expect((await call("/api/seekers/search?minAge=2", { token: him.token })).body.code).toBe("VALIDATION_FAILED");
+
+    expect((await call(reaction, { method: "DELETE", token: him.token })).status).toBe(204);
+    expect((await put(reaction, him.token, { kind: "PASSED" })).status).toBe(200);
+    const hidden = await call("/api/seekers/search", { token: him.token });
+    expect((hidden.body.profiles as { id: string }[]).map((p) => p.id)).not.toContain(her.id);
+    expect(hidden.body.passedCount).toBe(1);
+    expect((await call("/api/seekers/passes", { method: "DELETE", token: him.token })).body).toEqual({ restored: 1 });
+
+    const summary = await call("/api/me/summary", { token: him.token });
+    expect(summary.body).toEqual({ needsResponse: 0, activeChats: 0, pendingOutgoing: 0, unreadMessages: 0 });
+  });
+
   it("protects the cron endpoint", async () => {
     expect((await call("/api/cron/cleanup-stale-connections")).status).toBe(503);
     process.env.CRON_SECRET = "cron-secret-for-tests";

@@ -52,3 +52,96 @@ in Google Cloud to your domains.
 4. Chat uses 4-second polling; move to a realtime channel if usage grows.
 5. Photos are stored in Postgres (≤ 1.5 MB each); move to object storage (e.g. S3/R2 with signed URLs) at scale.
 6. Automated content moderation for photos and messages.
+
+---
+
+# Follow-up audit — October 2026
+
+Scope: the repository at commit `8177f2d`, after the search page, dual-channel chat and admin preview were added.
+
+## Findings
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 17 | High | **Same-gender browsing.** `GET /api/seekers/search` honoured a `gender` query parameter from any member, so a seeker could list profiles of their own gender, bypassing the opposite-gender rule the feed enforces. | Fixed — `gender` is honoured for administrators only (preview); covered by `tests/discovery.test.ts`. |
+| 18 | High | **Hidden fields could be inferred through search.** Filters and the keyword search matched columns the member had hidden (location, age, profession, bio, …). The value was stripped from the response, but the profile still appeared for "location = Pretoria", revealing it. Sorting by age leaked hidden ages the same way. | Fixed — every filter, the keyword search and the age ordering ignore hidden fields. |
+| 19 | Medium | Keyword and location search passed `%` and `_` straight into `ILIKE`, so `%` matched everyone and patterns could be used to probe values. | Fixed — wildcards are escaped (one shared `escapeLike`). |
+| 20 | Medium | Dismissing the report dialog (Cancel, Escape, clicking away) removed the profile from the list as if it had been reported. | Fixed — a profile is only removed after a report is actually submitted. |
+| 21 | Medium | The shortlist lived in `localStorage` under one key for the whole browser: it was shared between accounts on the same device, lost on another device, and the "My Shortlist" tab only filtered the page of results already loaded, so its count and its contents disagreed. | Fixed — saves and passes are stored per member in `profile_reactions`. |
+| 22 | Medium | Typing in the search box or an age field sent a request per keystroke with no ordering guarantee, so a slow earlier response could overwrite a newer one; a half-typed age ("2" on the way to "25") failed validation and replaced the results with an error. | Fixed — input is debounced, stale responses are discarded, and only complete ages are sent. |
+| 23 | Medium | Chat: a poll that was in flight while the user switched between the family lounge and the direct chat was merged into the other room's message list, and the previous room's messages stayed on screen under the new tab until the switch finished loading. | Fixed. |
+| 24 | Low | The "Deen Match" percentage returned a fixed 85% when there was no viewer, added points for *missing* data, and was clamped to 65–99%, so it never reflected a poor match. | Replaced by `src/lib/compatibility.ts`: compares only what both members shared and shows no score when there is too little. |
+| 25 | Low | `vite.config.ts` still injected `GEMINI_API_KEY` into the client bundle (finding 15 was recorded as removed but the `define` had come back). | Removed. |
+| 26 | Low | The admin user search claimed to cover usernames but did not; transcripts did not say which chat room a message was sent in. | Fixed. |
+| 27 | Low | Documentation said chats close after 7 idle days; the code uses 3 (`STALE_CONNECTION_DAYS`). UI copy hard-coded "3". | Docs corrected; UI reads the constant. |
+| 28 | Low | The profile detail dialog asked for `max-w-2xl` but the dialog primitive's `sm:max-w-sm` still applied, so it rendered 24rem wide on desktop. | Replaced by the new profile sheet. |
+| 29 | Low | The page reserved bottom padding under the full-height chat screen, so it always scrolled slightly. | Fixed — full-height screens opt out of the padding. |
+
+## Product change: Discover
+
+The separate "Matches" (daily batch) and "Search" pages are now one **Discover** page with a swipeable card
+deck (see the README). This deliberately reverses the original "no swiping" positioning. What keeps it
+intentional is unchanged and still enforced on the server: the readiness gate, 5 pending requests and 3 active
+chats at a time, 10 requests a day, recipient consent, wali approval and a mahram before any chat opens.
+
+## New recommendations
+
+7. **Read receipts / unread counts.** Navigation badges now show requests awaiting a decision, but there is
+   still no per-message read state, so a new chat message is only visible inside the chat.
+8. **Saved-profile notes.** Members shortlist people to discuss with family; a private note per saved profile
+   would make that conversation easier.
+
+## Mobile pass — October 2026
+
+Every screen was checked for every role at 320×568, 360×740, 390×844, 430×932 and 768×1024 with touch
+emulation, for sideways overflow, clipped labels and tap targets under 36 px.
+
+| # | Finding | Status |
+|---|---|---|
+| 30 | The card deck did not fit phones shorter than about 700 px: the action buttons sat under the tab bar, and the "Saved" tab was clipped at 320 px. | Fixed — the deck is sized from shared layout variables and the card adapts to its own height. |
+| 31 | Most controls were 25–32 px tall (buttons, tabs, inputs, filter chips, a 16 px show-password icon). | Fixed — shared controls grow to 40–44 px on touch devices; one-off controls were enlarged. |
+| 32 | `<select>`, `<textarea>` and the chat box used 14 px text, which makes iOS Safari zoom the page on focus. | Fixed — 16 px on phones. |
+| 33 | Chat room: banners and the room notice left about a third of a small screen for messages; the two room tabs wrapped or clipped; the header truncated the name to make room for three icon buttons. | Fixed — full-screen on phones, compact header with an overflow menu, short labels. |
+| 34 | Wali dashboard tab labels overlapped at 320 px; the section heading collapsed to a sliver. | Fixed. |
+| 35 | Admin tables (8 columns, 860–900 px minimum) were cut off on phones with no hint that they scrolled. | Fixed — one card per row below `md`. |
+| 36 | The admin user list displayed seeded demo e-mail addresses and the demo password ("Live Testing Hint"). | Removed. It belongs in the README, not in a production screen. |
+| 37 | Client-side navigation kept the previous page's scroll position, so a new page could open half-way down. | Fixed — each page starts at the top. |
+| 38 | Request cards stacked a large avatar above the name on phones, pushing the actions off the first screen. | Fixed — avatar beside the name. |
+
+Not verifiable in this environment: real iOS Safari (toolbar collapse, the on-screen keyboard, the home
+indicator inset) and real touch drags on the deck. They were exercised with an emulated touch browser and a
+simulated pointer; check them once on a physical iPhone and an Android phone before release.
+
+## Completion pass — 13 October 2026
+
+Work carried out on the items left open above.
+
+| Item | Outcome |
+|---|---|
+| Production migration | `0004_profile_reactions` and `0005_chat_reads_and_saved_notes` applied to the Neon production database. Both are additive; row counts of every existing table were identical before and after, and a second run was a no-op. The code that uses them is **not deployed yet**. |
+| Major upgrades | Express 4→5, Vite 6→8, `@vitejs/plugin-react` 5→6, TypeScript 5.8→7, Firebase 12→13, lucide-react 0.5→1, motion 12→14, dotenv 17→18, concurrently 9→10, `@types/node` 22→24 (matching the Node 24 runtime), `@types/express` 4→5. No source changes were needed beyond `import.meta.dirname` in `vite.config.ts`. |
+| `shadcn` dependency | Removed. It was a runtime dependency (214 packages, including Babel) only so one stylesheet could be imported; the nine variants actually used now live in `src/ui-variants.css`. |
+| `npm audit` | 4 high-severity advisories, all `@grpc/grpc-js` via Firestore, which this app never loads. Pinned to a patched release with an `overrides` entry; the audit is clean. |
+| Recommendation 2 — CSP `script-src` | Done. Checked against the production build: no violations while signing up, uploading a photo, opening dialogs and starting Google sign-in (helper script, frame and sign-in window all load). |
+| Recommendation 7 — unread counts | Done (`chat_reads`, navigation badge, per-conversation and per-room counts). Deliberately no read receipts: a member is not told whether their message was read. |
+| Recommendation 8 — notes on saved profiles | Done. |
+| Vercel hand-over under Express 5 | `api/index.ts` now answers malformed JSON itself, the JSON middleware honours the pre-parsed flag explicitly, and `tests/vercel-entry.test.ts` reproduces Vercel's buffered-body hand-over. |
+| Navigation badges | Refresh the moment a chat is read or a request answered, instead of on the next 45-second tick. |
+| Inactivity sweep | Ran four statements on every poll of the connections list; now at most once a minute per process. |
+| Raw Firebase errors | Google sign-in failures the member can act on have plain-language messages. |
+| Admin | The moderation queue opens a member's record by id instead of searching by e-mail; the user list reloads after an account is changed from the detail dialog. |
+
+### Still outstanding
+
+1. **Deploy.** The database is ahead of the deployed code, which is safe (the old code ignores the new tables),
+   but members see none of this until it ships.
+2. **Google sign-in on the production domain.** The policy was verified as far as a local address allows:
+   Firebase rejects sign-in from an unregistered origin. Complete one real Google sign-in after deploying; if
+   it fails, the browser console will name the directive to widen.
+3. **A real iPhone and Android phone** — keyboard, home-indicator inset and touch drags were only emulated.
+4. **Password reset and e-mail verification** — needs an e-mail provider (original recommendation 1).
+5. **httpOnly session cookies** in place of `localStorage` (original recommendation 3). The new CSP reduces the
+   exposure, since injected script is what makes `localStorage` tokens stealable, but it does not remove it.
+6. Realtime chat instead of polling, object storage for photos, automated content moderation (original
+   recommendations 4–6): each needs a service to be chosen.
+

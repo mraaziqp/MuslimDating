@@ -31,7 +31,7 @@ import {
 import { recordAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { errors } from "../http.js";
-import { asNumber, asString, rowsOf } from "../rows.js";
+import { asNumber, asString, escapeLike, rowsOf } from "../rows.js";
 
 const LIVE_STATUSES: ConnectionStatus[] = ["PENDING_MALE_PARENT", "PENDING_FEMALE_PARENT", "APPROVED"];
 
@@ -196,9 +196,6 @@ export async function updateReport(
 
 // ─── User directory ───────────────────────────────────────────────────────────
 
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
 
 export async function listUsers(db: Database, query: UserDirectoryQuery): Promise<Paginated<AdminUserRow>> {
   const conditions: SQL[] = [];
@@ -206,7 +203,12 @@ export async function listUsers(db: Database, query: UserDirectoryQuery): Promis
   if (query.status) conditions.push(eq(users.accountStatus, query.status));
   if (query.q) {
     const pattern = `%${escapeLike(query.q)}%`;
-    const search = or(ilike(users.email, pattern), ilike(users.phone, pattern), ilike(users.displayName, pattern));
+    const search = or(
+      ilike(users.email, pattern),
+      ilike(users.username, pattern),
+      ilike(users.phone, pattern),
+      ilike(users.displayName, pattern),
+    );
     if (search) conditions.push(search);
   }
   const where = conditions.length > 0 ? and(...conditions) : undefined;

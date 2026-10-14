@@ -1,5 +1,6 @@
 import { BookOpen, Briefcase, Clock, GraduationCap, Globe, Languages, MapPin, Ruler, ShieldCheck, Users, Utensils } from "lucide-react";
 import type { ReactNode } from "react";
+import type { PrivacyFieldKey } from "../../lib/constants";
 import type { PublicProfile } from "../../lib/contracts";
 import { READINESS_MODULES } from "../../lib/readiness";
 import { Badge } from "../ui/badge";
@@ -7,7 +8,7 @@ import { Badge } from "../ui/badge";
 function Fact({ icon, label, value }: { icon: ReactNode; label: string; value: string | number | null }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase [&_svg]:size-3.5 [&_svg]:text-rose-500">
         {icon}
         {label}
       </div>
@@ -16,31 +17,31 @@ function Fact({ icon, label, value }: { icon: ReactNode; label: string; value: s
   );
 }
 
-export function ProfileDetails({ profile, compact = false }: { profile: PublicProfile; compact?: boolean }) {
+export function ProfileDetails({ profile }: { profile: PublicProfile }) {
+  const hidden = new Set<PrivacyFieldKey>(profile.hiddenFields);
   const moduleTitles = profile.completedModules
     .map((id) => READINESS_MODULES.find((m) => m.id === id)?.title)
     .filter((title): title is string => Boolean(title));
 
+  // "Private" means the member chose to hide it; a detail they never filled in is simply left out.
+  const fact = (key: PrivacyFieldKey, icon: ReactNode, label: string, value: string | number | null) => {
+    if (hidden.has(key)) return <Fact key={key} icon={icon} label={label} value={null} />;
+    if (value === null || value === "") return null;
+    return <Fact key={key} icon={icon} label={label} value={value} />;
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Fact icon={<Clock className="size-3.5 text-rose-500" />} label="Prayer" value={profile.prayerFrequency} />
-        <Fact icon={<Utensils className="size-3.5 text-rose-500" />} label="Diet" value={profile.dietaryHabits} />
-        <Fact icon={<Briefcase className="size-3.5 text-rose-500" />} label="Profession" value={profile.profession} />
-        {!compact && (
-          <>
-            <Fact icon={<MapPin className="size-3.5 text-rose-500" />} label="Location" value={profile.location} />
-            <Fact icon={<GraduationCap className="size-3.5 text-rose-500" />} label="Education" value={profile.education} />
-            <Fact icon={<Users className="size-3.5 text-rose-500" />} label="Marital status" value={profile.maritalStatus} />
-            <Fact icon={<Ruler className="size-3.5 text-rose-500" />} label="Height" value={profile.height} />
-            <Fact icon={<Globe className="size-3.5 text-rose-500" />} label="Nationality" value={profile.nationality} />
-            <Fact
-              icon={<Languages className="size-3.5 text-rose-500" />}
-              label="Languages"
-              value={profile.hiddenFields.includes("languages") ? null : profile.languages.join(", ") || "—"}
-            />
-          </>
-        )}
+        {fact("prayerFrequency", <Clock />, "Prayer", profile.prayerFrequency)}
+        {fact("dietaryHabits", <Utensils />, "Diet", profile.dietaryHabits)}
+        {fact("profession", <Briefcase />, "Profession", profile.profession)}
+        {fact("location", <MapPin />, "Location", profile.location)}
+        {fact("education", <GraduationCap />, "Education", profile.education)}
+        {fact("maritalStatus", <Users />, "Marital status", profile.maritalStatus)}
+        {fact("height", <Ruler />, "Height", profile.height)}
+        {fact("nationality", <Globe />, "Nationality", profile.nationality)}
+        {fact("languages", <Languages />, "Languages", profile.languages.join(", "))}
       </div>
 
       {profile.bio && <p className="rounded-xl bg-rose-50/60 p-3 text-sm leading-relaxed text-slate-700 italic">“{profile.bio}”</p>}

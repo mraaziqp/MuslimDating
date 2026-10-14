@@ -6,7 +6,7 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { READINESS_MODULES } from "../src/lib/readiness.js";
 import { messages, parentChildLinks, reports, users, type LinkKind, type NewUser, type User } from "../src/lib/schema.js";
 import { createConnection, decideConnection } from "../server/actions/matchmaking.js";
@@ -329,7 +329,6 @@ try {
       reportedId: omar.id,
       reason: "Sent an inappropriate message request outside the platform guidelines.",
     });
-    await db.execute(sql`SELECT 1`);
 
     console.log("Seeded demo accounts (password for all: %s)", PASSWORD);
     for (const u of [

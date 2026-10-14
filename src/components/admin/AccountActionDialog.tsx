@@ -124,7 +124,7 @@ export function AccountActionDialog({ user, onClose, onUpdated }: AccountActionD
                   aria-checked={action === key}
                   onClick={() => setAction(key)}
                   className={cn(
-                    "rounded-lg border px-2.5 py-1 text-xs font-medium",
+                    "h-9 rounded-lg border px-3 text-xs font-medium",
                     action === key
                       ? ACTION_COPY[key].destructive
                         ? "border-rose-300 bg-rose-50 text-rose-700"

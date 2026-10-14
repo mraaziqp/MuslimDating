@@ -29,9 +29,9 @@ function formatValue(value: unknown): string {
 function Party({ party }: { party: AuditLogView["actor"] }) {
   if (!party) return <span className="text-slate-400 italic">System</span>;
   return (
-    <span>
-      <span className="font-medium text-slate-800">{party.displayName}</span>
-      <span className="block text-[11px] text-slate-400">{party.email}</span>
+    <span className="block min-w-0">
+      <span className="block truncate font-medium text-slate-800">{party.displayName}</span>
+      <span className="block truncate text-[11px] text-slate-400">{party.email}</span>
     </span>
   );
 }
@@ -75,7 +75,47 @@ export function AuditTrail() {
         <ErrorState error={logs.error ?? new Error("No data")} onRetry={() => void logs.reload()} />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+          <ul className="space-y-2 md:hidden">
+            {logs.data.items.map((log) => (
+              <li key={log.id} className="space-y-2 rounded-2xl border border-slate-100 bg-white p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold", actionTone(log.action))}>
+                    {log.action}
+                  </span>
+                  <time dateTime={log.createdAt} className="text-xs text-slate-500 tabular-nums">
+                    {format(new Date(log.createdAt), "d MMM yyyy, HH:mm:ss")}
+                  </time>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Actor</p>
+                    <Party party={log.actor} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Target</p>
+                    <Party party={log.target} />
+                  </div>
+                </div>
+                {Object.entries(log.metadata).length > 0 && (
+                  <dl className="space-y-0.5 border-t border-slate-50 pt-2 text-xs text-slate-600">
+                    {Object.entries(log.metadata).map(([key, value]) => (
+                      <div key={key} className="flex gap-1.5">
+                        <dt className="shrink-0 text-slate-400">{key}:</dt>
+                        <dd className="break-all">{formatValue(value)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </li>
+            ))}
+            {logs.data.items.length === 0 && (
+              <li className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-10 text-center text-sm text-slate-500">
+                No audit events recorded yet.
+              </li>
+            )}
+          </ul>
+
+          <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white md:block">
             <table className="w-full min-w-[860px] text-left text-sm">
               <thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
                 <tr>
@@ -129,7 +169,7 @@ export function AuditTrail() {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
             <span>
               {logs.data.total.toLocaleString()} events · page {page} of {totalPages}
             </span>

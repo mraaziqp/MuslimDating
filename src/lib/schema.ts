@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   check,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -37,6 +38,8 @@ export const accountStatusEnum = pgEnum("account_status", ["ACTIVE", "SUSPENDED"
 export const reportStatusEnum = pgEnum("report_status", ["PENDING", "REVIEWED", "RESOLVED"]);
 
 export const linkKindEnum = pgEnum("link_kind", ["WALI", "MAHRAM"]);
+
+export const reactionKindEnum = pgEnum("reaction_kind", ["SAVED", "PASSED"]);
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
@@ -147,6 +150,35 @@ export const linkInvites = pgTable(
   (t) => [index("idx_invites_child").on(t.childId)],
 );
 
+// ─── Discovery reactions ──────────────────────────────────────────────────────
+
+/**
+ * A seeker's private reaction to a profile while browsing: SAVED keeps it on
+ * their shortlist, PASSED hides it from discovery for a cooling-off period.
+ * Never shown to the other member and never written to the audit trail.
+ */
+export const profileReactions = pgTable(
+  "profile_reactions",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetId: uuid("target_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: reactionKindEnum("kind").notNull(),
+    /** A private reminder on a saved profile, e.g. what to raise with family. Cleared when the save goes. */
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "profile_reactions_pk", columns: [t.userId, t.targetId] }),
+    index("idx_reactions_user_kind").on(t.userId, t.kind),
+    check("chk_reactions_not_self", sql`${t.userId} <> ${t.targetId}`),
+    check("chk_reactions_note_length", sql`${t.note} IS NULL OR char_length(${t.note}) <= 500`),
+  ],
+);
+
 // ─── Connections ──────────────────────────────────────────────────────────────
 
 export const connections = pgTable(
@@ -219,6 +251,22 @@ export const messages = pgTable(
     index("idx_messages_connection_created").on(t.connectionId, t.createdAt),
     check("chk_messages_length", sql`char_length(${t.text}) BETWEEN 1 AND 2000`),
   ],
+);
+
+/** When each participant last opened each room of a chat; drives unread counts. Private to that participant. */
+export const chatReads = pgTable(
+  "chat_reads",
+  {
+    connectionId: uuid("connection_id")
+      .notNull()
+      .references(() => connections.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull().$type<"FAMILY" | "DIRECT">(),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ name: "chat_reads_pk", columns: [t.connectionId, t.userId, t.channel] })],
 );
 
 // ─── Audit logs (append-only; UPDATE/DELETE blocked by trigger) ──────────────
@@ -330,3 +378,4 @@ export type ConnectionStatus = (typeof connectionStatusEnum.enumValues)[number];
 export type AccountStatus = (typeof accountStatusEnum.enumValues)[number];
 export type ReportStatus = (typeof reportStatusEnum.enumValues)[number];
 export type LinkKind = (typeof linkKindEnum.enumValues)[number];
+export type ProfileReaction = typeof profileReactions.$inferSelect;

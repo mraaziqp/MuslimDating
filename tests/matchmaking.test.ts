@@ -5,11 +5,11 @@ import type { DatabaseHandle } from "../server/db.js";
 import {
   createConnection,
   decideConnection,
-  getFeed,
   listConnections,
   setPhotoConsent,
   withdrawConnection,
 } from "../server/actions/matchmaking.js";
+import { getFeed } from "../server/actions/discovery.js";
 import { readPhoto } from "../server/actions/photos.js";
 import { getChat, sendMessage } from "../server/actions/chat.js";
 import { dbErrorMessage, errorCode, linkFamily, makeUser, setupDatabase } from "./helpers.js";

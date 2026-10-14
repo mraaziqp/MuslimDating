@@ -5,6 +5,12 @@ export const MAX_ACTIVE_CHATS = 3;
 export const STALE_CONNECTION_DAYS = 3;
 export const MAX_PENDING_OUTGOING = 5;
 
+/** A passed profile stays out of discovery for this long, then may be suggested again. */
+export const PASS_COOLDOWN_DAYS = 30;
+
+export const REACTION_KINDS = ["SAVED", "PASSED"] as const;
+export type ReactionKind = (typeof REACTION_KINDS)[number];
+
 export const CHAT_CHANNELS = ["FAMILY", "DIRECT"] as const;
 export type ChatChannel = (typeof CHAT_CHANNELS)[number];
 
@@ -100,8 +106,8 @@ export function oneOf<T extends string>(options: readonly T[], value: string): T
 }
 
 export const ROLE_HOME: Record<UserRole, string> = {
-  SOLO: "/feed",
-  DEPENDENT: "/feed",
+  SOLO: "/discover",
+  DEPENDENT: "/discover",
   PARENT: "/parent-dashboard",
   MAHRAM: "/chats",
   ADMIN: "/admin",

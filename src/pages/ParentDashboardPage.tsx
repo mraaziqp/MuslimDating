@@ -6,6 +6,7 @@ import { Badge } from "../components/ui/badge";
 import { buttonVariants } from "../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { useAsync, usePolling } from "../hooks/useAsync";
+import { announceActivityChanged } from "../lib/activity";
 import { api } from "../lib/api";
 import type { ConnectionView } from "../lib/contracts";
 
@@ -32,10 +33,12 @@ export function ParentDashboardPage() {
   const history = guarded.filter((c) => c.status === "REJECTED" || c.status === "TERMINATED");
   const wards = family.dependents.filter((d) => d.kind === "WALI");
 
-  const replace = (next: ConnectionView) =>
+  const replace = (next: ConnectionView) => {
     data.setData((prev) =>
       prev ? { ...prev, connections: prev.connections.map((c) => (c.id === next.id ? next : c)) } : prev,
     );
+    announceActivityChanged();
+  };
 
   const list = (views: ConnectionView[], empty: string, expanded = false) =>
     views.length === 0 ? (
@@ -61,9 +64,9 @@ export function ParentDashboardPage() {
       />
 
       <section className="rounded-2xl border border-slate-100 bg-white p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 font-semibold text-slate-800">
-            <Users className="size-4 text-rose-500" /> Family members under your guardianship
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex min-w-0 items-center gap-2 font-semibold text-slate-800">
+            <Users className="size-4 shrink-0 text-rose-500" /> Under your guardianship
           </h2>
           <Link to="/family" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Link a family member
@@ -85,11 +88,20 @@ export function ParentDashboardPage() {
       </section>
 
       <Tabs defaultValue="pending">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
-          <TabsTrigger value="progress">In progress ({inProgress.length})</TabsTrigger>
-          <TabsTrigger value="active">Active ({active.length})</TabsTrigger>
-          <TabsTrigger value="history">History ({history.length})</TabsTrigger>
+        {/* Four labels do not fit a phone; the strip scrolls sideways there and spreads out from sm up. */}
+        <TabsList className="no-scrollbar flex w-full justify-start overflow-x-auto sm:justify-center">
+          <TabsTrigger value="pending" className="flex-none px-3 sm:flex-1">
+            Pending ({pending.length})
+          </TabsTrigger>
+          <TabsTrigger value="progress" className="flex-none px-3 sm:flex-1">
+            In progress ({inProgress.length})
+          </TabsTrigger>
+          <TabsTrigger value="active" className="flex-none px-3 sm:flex-1">
+            Active ({active.length})
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex-none px-3 sm:flex-1">
+            History ({history.length})
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="pending" className="mt-4">
           {list(pending, "No requests need your decision", true)}

@@ -19,6 +19,7 @@ import { recordAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { errors } from "../http.js";
 import { toSelfUser } from "../presenters.js";
+import { escapeLike } from "../rows.js";
 import { listAuditLogs, selectAdminRows } from "./admin.js";
 import { userHasPhoto } from "./users.js";
 
@@ -37,9 +38,6 @@ function person(p: PersonColumns): AdminPerson {
   return { id: p.id, displayName: p.displayName ?? "Member", role: p.role, email: p.email };
 }
 
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
 
 async function selectConnectionRows(
   db: Database,
@@ -238,6 +236,7 @@ export async function getConversationTranscript(
             : message.senderId === connection.mahram?.id
               ? "MAHRAM"
               : "OTHER",
+      channel: message.channel,
       text: message.text,
       createdAt: message.createdAt.toISOString(),
     })),

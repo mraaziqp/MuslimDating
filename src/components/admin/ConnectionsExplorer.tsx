@@ -60,6 +60,7 @@ function TranscriptBody({ connectionId }: { connectionId: string }) {
                 <span className="font-semibold text-slate-700">
                   {message.senderName}
                   {message.senderRole === "MAHRAM" && " · Mahram"}
+                  {message.channel === "DIRECT" ? " · Direct chat" : " · Family lounge"}
                 </span>
                 <time dateTime={message.createdAt}>{format(new Date(message.createdAt), "d MMM yyyy, HH:mm")}</time>
               </div>
@@ -136,7 +137,47 @@ export function ConnectionsExplorer({ onViewUser }: { onViewUser: (userId: strin
         <ErrorState error={list.error ?? new Error("No data")} onRetry={() => void list.reload()} />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+          <ul className="space-y-2 md:hidden">
+            {list.data.items.map((c) => (
+              <li key={c.id} className="rounded-2xl border border-slate-100 bg-white p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1.5">
+                    {(
+                      [
+                        ["From", c.sender],
+                        ["To", c.receiver],
+                      ] as const
+                    ).map(([label, p]) => (
+                      <button key={label} type="button" onClick={() => onViewUser(p.id)} className="flex w-full min-w-0 items-baseline gap-2 text-left">
+                        <span className="w-8 shrink-0 text-[10px] font-bold tracking-wider text-slate-400 uppercase">{label}</span>
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-slate-900">{p.displayName}</span>
+                          <span className="block truncate text-xs text-slate-500">{p.email}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <StatusBadge status={c.status} className="shrink-0" />
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <p className="min-w-0 text-xs text-slate-500">
+                    {c.mahram ? `Mahram: ${c.mahram.displayName}` : "No mahram"} · {c.messageCount} message{c.messageCount === 1 ? "" : "s"} ·{" "}
+                    {timeAgo(c.lastActivityAt)}
+                  </p>
+                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setTranscriptId(c.id)}>
+                    {c.messageCount > 0 ? <MessageSquare /> : <Eye />} Open
+                  </Button>
+                </div>
+              </li>
+            ))}
+            {list.data.items.length === 0 && (
+              <li className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-10 text-center text-sm text-slate-500">
+                No connections match these filters.
+              </li>
+            )}
+          </ul>
+
+          <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white md:block">
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
                 <tr>
@@ -183,7 +224,7 @@ export function ConnectionsExplorer({ onViewUser }: { onViewUser: (userId: strin
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
             <span>
               {list.data.total.toLocaleString()} connection{list.data.total === 1 ? "" : "s"} · page {page} of {totalPages}
             </span>

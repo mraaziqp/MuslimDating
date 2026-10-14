@@ -7,6 +7,11 @@ export function rowsOf(result: unknown): Record<string, unknown>[] {
   return [];
 }
 
+/** Escapes LIKE/ILIKE wildcards so user input is matched literally. */
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
 export function asString(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
   return String(value);

@@ -1,9 +1,10 @@
 # NikahPath
 
-Intentional, family-first halal matchmaking. No swiping — curated daily introductions, wali approval,
-mahram-chaperoned chats, private photos, and a readiness course before anyone can connect.
+Intentional, family-first halal matchmaking. Discovery is a card deck you swipe through — but every right
+swipe is a real, limited request that goes through wali approval and opens only a mahram-chaperoned chat.
+Photos stay private, and a readiness course comes before anyone can connect.
 
-**Stack:** React 19 · Vite · Tailwind CSS 4 · Express (Vercel serverless) · Drizzle ORM · Neon Postgres ·
+**Stack:** React 19 · Vite 8 · Tailwind CSS 4 · Express 5 (Vercel serverless) · Drizzle ORM · Neon Postgres ·
 Firebase Authentication (Google) + email/password · zod · vitest
 
 ---
@@ -32,7 +33,10 @@ Demo accounts (password `Bismillah-2026`):
 | `amina@nikahpath.test` | DEPENDENT (f) | Wali: Abdullah |
 | `abdullah@nikahpath.test` | PARENT | Amina's wali |
 | `khalid@nikahpath.test` | MAHRAM | Chaperone for Maryam and Huda |
-| `omar@nikahpath.test` | SOLO (m) | Has not completed readiness; has a report against him |
+| `omar@nikahpath.test` | SOLO (m) | Has a report against him (Admin → Moderation) |
+
+More seekers are seeded so there is something to browse: `bilal`, `tariq`, `farhan` (brothers) and `fatima`,
+`zainab`, `salma`, `yasmin`, `layla` (sisters), all `@nikahpath.test`, plus `farooq` (Zainab's wali).
 
 ## Scripts
 
@@ -65,8 +69,26 @@ request ─┬─ sender requires vetting ─► PENDING_MALE_PARENT ── send
          └─ otherwise ──────────────────────────────────────────────────────────────┴─► PENDING_FEMALE_PARENT
 PENDING_FEMALE_PARENT ── recipient accepts (+ recipient's wali approves if DEPENDENT/vetted)
                       ── mahram assigned ──► APPROVED (chat unlocked)
-any pending stage ── declined ──► REJECTED        APPROVED ── ended / banned / 7 days idle ──► TERMINATED
+any pending stage ── declined ──► REJECTED        APPROVED ── ended / banned / 3 days idle ──► TERMINATED
 ```
+
+### Discover
+
+`/discover` is the seeker's home. It has three tabs and two views (cards or grid):
+
+* **Today** — up to five picks, stable for the day. Passing on one shrinks the batch rather than refilling it.
+* **Browse** — everyone eligible, with keyword search and filters.
+* **Saved** — the private shortlist.
+
+In the card view, swipe (or use the buttons / arrow keys): **right** sends a connection request, **up** saves
+for later, **left** passes. The last action can be undone — undoing a request withdraws it. Tap a card for the
+full profile and a "what you have in common" summary (`src/lib/compatibility.ts`), which compares only details
+both members have chosen to share and shows no score when there is too little to compare.
+
+Saves and passes are stored per member in `profile_reactions`. They are private: the other member is never
+told, and they are not written to the audit trail. A pass hides a profile for 30 days (`PASS_COOLDOWN_DAYS`).
+A saved profile can carry a private note (up to 500 characters) — something to remember or to raise with
+family. Only its author can read it; it goes when the save goes.
 
 * **Readiness Gate** — both members must pass the “Etiquette of Halal Courtship” quiz; enforced in the
   service layer and again inside the `INSERT` statement.
@@ -77,8 +99,32 @@ any pending stage ── declined ──► REJECTED        APPROVED ── ende
 * **No duplicates** — partial unique index on the unordered pair where `status <> 'TERMINATED'`.
 * **Photos** — stored server-side and streamed only after an authorisation check. Before mutual consent the
   server only ever sends a 24 px thumbnail (or nothing, with modesty blur on). EXIF is stripped on upload.
+* **Unread messages** — `chat_reads` records when each participant last opened each room of a chat. The
+  Chats tab, the conversation list and the other room's tab show what is waiting. Read positions are private:
+  nobody is told whether their message has been read. The mahram only ever counts the family lounge.
+* **Search privacy** — seekers only ever see the opposite gender, and a filter or keyword never matches a
+  field the member has hidden, so search cannot be used to infer hidden details.
 * **Ghosting cleaner** — `/api/cron/cleanup-stale-connections` terminates `APPROVED` chats with no messages
-  from either member for 7 days, writing an audit record in the same statement.
+  from either member for 3 days (`STALE_CONNECTION_DAYS`), writing an audit record in the same statement.
+
+## Mobile
+
+The app is built phone-first and checked from 320 px wide up to tablets.
+
+* **Navigation** — a bottom tab bar per role below the `lg` breakpoint (it steps aside while the keyboard is
+  open), the profile and sign-out in the top bar, and a back button on every sub-screen. The chat room is
+  full-screen on phones with its own header.
+* **Layout variables** — `--nav-h`, `--tabbar-h`, `--page-pb` and `--safe-bottom` in `src/index.css` are the
+  single source for the app chrome sizes. Full-height screens (the deck, the chat room) compute their height
+  from them, so change a bar's height there and nowhere else.
+* **Touch sizing** — the shared `Button`, `Input`, `NativeSelect` and `Tabs` grow to 40–44 px wherever the
+  pointer is a finger (`pointer-coarse:`), without changing the denser desktop layout. Form controls use 16 px
+  text on phones so iOS does not zoom the page on focus.
+* **Dialogs** are bottom sheets on phones (`src/components/ui/dialog.tsx`) and centred dialogs from `sm` up.
+* **The profile card** is a size container: on a short phone it drops the bio and extra chips rather than
+  clipping, so the deck and its buttons fit a 320×568 screen without scrolling.
+* **Installable** — `public/manifest.webmanifest` and the icons in `public/icons/` let members add it to their
+  home screen. Regenerate the PNGs from `public/icons/icon.svg` if the mark changes.
 
 ## Admin
 
@@ -105,16 +151,29 @@ Admins can sign in with a **username** instead of an email. Two ways to create o
 
 Never commit the admin password. Sign-in is rate limited (10 attempts per username per 15 minutes).
 
+## Security headers
+
+`vercel.json` sends a Content Security Policy: scripts only from this origin plus `apis.google.com` (the helper
+Firebase Auth loads for Google sign-in), frames only to Firebase and Google, connections only to this origin and
+Google's identity endpoints. `server/index.ts` sends the same policy when self-hosting; keep the two in step.
+If you add a third-party script, font or API, it must be added to the policy or the browser will block it.
+
+## UI components
+
+The primitives in `src/components/ui` follow shadcn/ui (Base UI flavour). The `shadcn` CLI is not a dependency;
+run it when you need it — `npx shadcn@latest add <component>` — using the existing `components.json`. The state
+variants those components rely on (`data-open:` …) live in `src/ui-variants.css`.
+
 ## Project layout
 
 ```
 api/index.ts            Vercel entry → server/app.ts
 server/app.ts           Express routes (auth, validation, error mapping)
-server/actions/*        Business logic: matchmaking state machine, admin, chat, family, photos, cron …
+server/actions/*        Business logic: matchmaking state machine, discovery, admin, chat, family, photos, cron …
 server/migrations.ts    Idempotent SQL migrations, triggers and constraints
 src/lib/schema.ts       Drizzle schema (source of truth for types)
 src/lib/contracts.ts    zod request schemas + response DTOs shared by client and server
-src/pages, components   React app; components/admin/* is the admin suite
+src/pages, components   React app; components/discover/* is the card deck, components/admin/* the admin suite
 tests/                  vitest integration tests against in-memory Postgres
 ```
 

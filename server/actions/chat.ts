@@ -5,6 +5,7 @@ import type { Database } from "../db.js";
 import { errors } from "../http.js";
 import { enforceRateLimit } from "../rate-limit.js";
 import { resolveConnection } from "./matchmaking.js";
+import { markRoomRead, totalUnread, unreadByConnection, type UnreadByChannel } from "./unread.js";
 
 const PAGE_SIZE = 200;
 
@@ -27,7 +28,7 @@ export async function getChat(
   after?: Date,
   requestedChannel?: "FAMILY" | "DIRECT",
 ): Promise<ChatDetail> {
-  const { conn, view } = await resolveConnection(db, actor, connectionId);
+  const { conn, view } = await resolveConnection(db, actor, connectionId, { unread: false });
   const isMahram = actor.id === conn.mahramId;
   const isSuitor = [conn.senderId, conn.receiverId].includes(actor.id);
   if (!isMahram && !isSuitor) throw errors.notFound("Chat not found.");
@@ -78,8 +79,15 @@ export async function getChat(
   ]);
   if (view.mahram) names.set(view.mahram.id, view.mahram.displayName);
 
+  // Looking at a room reads it: on first load, and again whenever a poll brings something new.
+  let unread: UnreadByChannel = { FAMILY: 0, DIRECT: 0 };
+  if (conn.status === "APPROVED") {
+    if (!after || rows.length > 0) await markRoomRead(db, actor, conn.id, activeChannel);
+    unread = (await unreadByConnection(db, actor, [conn.id])).get(conn.id) ?? unread;
+  }
+
   return {
-    connection: view,
+    connection: { ...view, unreadCount: totalUnread(unread) },
     messages: rows.map((m) => present(m, actor.id, names, conn.mahramId)),
     canSend:
       conn.status === "APPROVED" &&
@@ -89,6 +97,7 @@ export async function getChat(
     hasFamilyChat,
     familyMessageCount,
     directMessageCount,
+    unread,
   };
 }
 
@@ -101,7 +110,7 @@ export async function sendMessage(
 ): Promise<MessageView> {
   await enforceRateLimit(db, `message:${actor.id}`, 30, 60, "You are sending messages too quickly.");
 
-  const { conn } = await resolveConnection(db, actor, connectionId);
+  const { conn } = await resolveConnection(db, actor, connectionId, { unread: false });
   const isMahram = actor.id === conn.mahramId;
   const isSuitor = [conn.senderId, conn.receiverId].includes(actor.id);
   if (!isMahram && !isSuitor) throw errors.notFound("Chat not found.");

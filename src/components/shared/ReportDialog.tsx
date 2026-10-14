@@ -11,9 +11,11 @@ interface ReportDialogProps {
   name: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called only after a report was actually submitted (not when the dialog is dismissed). */
+  onReported?: () => void;
 }
 
-export function ReportDialog({ userId, name, open, onOpenChange }: ReportDialogProps) {
+export function ReportDialog({ userId, name, open, onOpenChange, onReported }: ReportDialogProps) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const valid = reason.trim().length >= 10;
@@ -24,6 +26,7 @@ export function ReportDialog({ userId, name, open, onOpenChange }: ReportDialogP
       await api.report({ reportedId: userId, reason: reason.trim() });
       toast.success("Report submitted. Our moderators will review it confidentially.");
       setReason("");
+      onReported?.();
       onOpenChange(false);
     } catch (err) {
       toast.error(errorMessage(err));

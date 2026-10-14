@@ -30,7 +30,13 @@ export function AccountStatusBadge({ status }: { status: AccountStatus }) {
   );
 }
 
-export function UserDirectory({ onViewUser }: { onViewUser: (userId: string) => void }) {
+interface UserDirectoryProps {
+  onViewUser: (userId: string) => void;
+  /** Changes when an account was modified from outside this list, so the list reloads. */
+  refreshToken?: number;
+}
+
+export function UserDirectory({ onViewUser, refreshToken = 0 }: UserDirectoryProps) {
   const [search, setSearch] = useState("");
   const q = useDebouncedValue(search.trim(), 300);
   const [role, setRole] = useState<UserRole | null>(null);
@@ -42,7 +48,7 @@ export function UserDirectory({ onViewUser }: { onViewUser: (userId: string) => 
 
   const users = useAsync(
     () => api.admin.users({ page, pageSize: PAGE_SIZE, q: q || undefined, role: role ?? undefined, status: status ?? undefined }),
-    [page, q, role, status],
+    [page, q, role, status, refreshToken],
   );
 
   const totalPages = users.data ? Math.max(1, Math.ceil(users.data.total / PAGE_SIZE)) : 1;
@@ -51,9 +57,6 @@ export function UserDirectory({ onViewUser }: { onViewUser: (userId: string) => 
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-xs text-slate-600">
-        💡 <strong>Live Testing Hint:</strong> To test two-way courtship chats, wali reviews, or suitor connections, sign in as a seeded seeker (e.g. <code className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono font-medium text-slate-800">yusuf@nikahpath.test</code> or <code className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono font-medium text-slate-800">maryam@nikahpath.test</code>, password <code className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono font-medium text-slate-800">Bismillah-2026</code>).
-      </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-slate-400" />
@@ -94,7 +97,53 @@ export function UserDirectory({ onViewUser }: { onViewUser: (userId: string) => 
         <ErrorState error={users.error ?? new Error("No data")} onRetry={() => void users.reload()} />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+          {/* Phones get one card per member; the eight-column table starts at md. */}
+          <ul className="space-y-2 md:hidden">
+            {users.data.items.map((u) => (
+              <li key={u.id} className="rounded-2xl border border-slate-100 bg-white p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <button type="button" onClick={() => onViewUser(u.id)} className="min-w-0 text-left">
+                    <span className="flex items-center gap-1 font-semibold text-slate-900">
+                      <span className="truncate">{u.displayName ?? <span className="font-normal text-slate-400 italic">No name</span>}</span>
+                      {u.readinessCompleted && <ShieldCheck className="size-3.5 shrink-0 text-emerald-500" aria-label="Readiness certified" />}
+                    </span>
+                    <span className="block truncate text-xs text-slate-500">
+                      {u.username && <span className="font-mono">@{u.username} · </span>}
+                      {u.email}
+                    </span>
+                  </button>
+                  <AccountStatusBadge status={u.accountStatus} />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {ROLE_LABELS[u.role]} · joined {new Date(u.createdAt).toLocaleDateString()}
+                  {u.lastSeenAt && ` · seen ${timeAgo(u.lastSeenAt)}`}
+                </p>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <p className="text-xs text-slate-600">
+                    <span className={cn(u.reportCount > 0 && "font-semibold text-rose-700")}>
+                      {u.reportCount} report{u.reportCount === 1 ? "" : "s"}
+                    </span>{" "}
+                    · {u.activeChats} active chat{u.activeChats === 1 ? "" : "s"}
+                  </p>
+                  <div className="flex gap-1.5">
+                    <Button variant="ghost" size="sm" onClick={() => onViewUser(u.id)}>
+                      View
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setManaging(u)}>
+                      Manage
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ))}
+            {users.data.items.length === 0 && (
+              <li className="rounded-2xl border border-dashed border-slate-200 bg-white px-3 py-10 text-center text-sm text-slate-500">
+                No users match these filters.
+              </li>
+            )}
+          </ul>
+
+          <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white md:block">
             <table className="w-full min-w-[880px] text-left text-sm">
               <thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
                 <tr>
@@ -155,7 +204,7 @@ export function UserDirectory({ onViewUser }: { onViewUser: (userId: string) => 
             </table>
           </div>
 
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
             <span>
               {users.data.total.toLocaleString()} user{users.data.total === 1 ? "" : "s"} · page {page} of {totalPages}
             </span>

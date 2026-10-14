@@ -24,12 +24,9 @@ export function ModerationQueue() {
   if (queue.error || !queue.data) return <ErrorState error={queue.error ?? new Error("No data")} onRetry={() => void queue.reload()} />;
   const { reports, flagged } = queue.data;
 
-  const openManage = async (userId: string, email: string) => {
+  const openManage = async (userId: string) => {
     try {
-      const page = await api.admin.users({ q: email, pageSize: 10 });
-      const row = page.items.find((u) => u.id === userId);
-      if (row) setManaging(row);
-      else toast.error("User not found.");
+      setManaging((await api.admin.userDetail(userId)).account);
     } catch (err) {
       toast.error(errorMessage(err));
     }
@@ -75,7 +72,7 @@ export function ModerationQueue() {
               <p className="rounded-xl bg-slate-50 p-3 text-sm whitespace-pre-wrap text-slate-700">{report.reason}</p>
               {report.resolutionNote && <p className="text-xs text-slate-500">Note: {report.resolutionNote}</p>}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="destructive" onClick={() => void openManage(report.reported.id, report.reported.email)}>
+                <Button size="sm" variant="destructive" onClick={() => void openManage(report.reported.id)}>
                   Take action on user
                 </Button>
                 {report.status === "PENDING" && (
@@ -122,7 +119,7 @@ export function ModerationQueue() {
                   </li>
                 ))}
               </ul>
-              <Button size="sm" variant="outline" className="w-full" onClick={() => void openManage(item.user.id, item.user.email)}>
+              <Button size="sm" variant="outline" className="w-full" onClick={() => void openManage(item.user.id)}>
                 Review account
               </Button>
             </article>

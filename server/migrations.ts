@@ -308,6 +308,53 @@ export const MIGRATIONS: Migration[] = [
       "CREATE INDEX IF NOT EXISTS idx_messages_connection_channel_created ON messages (connection_id, channel, created_at);",
     ],
   },
+  {
+    id: "0004_profile_reactions",
+    statements: [
+      ...createEnum("reaction_kind", ["SAVED", "PASSED"]),
+      `CREATE TABLE IF NOT EXISTS profile_reactions (
+        user_id uuid NOT NULL,
+        target_id uuid NOT NULL,
+        kind reaction_kind NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT profile_reactions_pk PRIMARY KEY (user_id, target_id)
+      );`,
+      fk("profile_reactions", "user_id", "cascade"),
+      fk("profile_reactions", "target_id", "cascade"),
+      addConstraint("profile_reactions", "chk_reactions_not_self", "CHECK (user_id <> target_id)"),
+      "CREATE INDEX IF NOT EXISTS idx_reactions_user_kind ON profile_reactions USING btree (user_id, kind);",
+    ],
+  },
+  {
+    id: "0005_chat_reads_and_saved_notes",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS chat_reads (
+        connection_id uuid NOT NULL,
+        user_id uuid NOT NULL,
+        channel text NOT NULL,
+        last_read_at timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT chat_reads_pk PRIMARY KEY (connection_id, user_id, channel)
+      );`,
+      addConstraint(
+        "chat_reads",
+        "chat_reads_connection_id_connections_id_fk",
+        "FOREIGN KEY (connection_id) REFERENCES public.connections(id) ON DELETE cascade ON UPDATE no action",
+      ),
+      fk("chat_reads", "user_id", "cascade"),
+      addConstraint("chat_reads", "chk_chat_reads_channel", "CHECK (channel IN ('FAMILY', 'DIRECT'))"),
+      // Existing chats start as read, so nobody opens the app to a backlog of "unread" history.
+      `INSERT INTO chat_reads (connection_id, user_id, channel)
+       SELECT c.id, p.user_id, ch.channel
+         FROM connections c
+         CROSS JOIN LATERAL (VALUES (c.sender_id), (c.receiver_id), (c.mahram_id)) AS p(user_id)
+         CROSS JOIN (VALUES ('FAMILY'), ('DIRECT')) AS ch(channel)
+        WHERE p.user_id IS NOT NULL
+          AND (ch.channel = 'FAMILY' OR p.user_id IS DISTINCT FROM c.mahram_id)
+       ON CONFLICT DO NOTHING;`,
+      addColumn("profile_reactions", "note text"),
+      addConstraint("profile_reactions", "chk_reactions_note_length", "CHECK (note IS NULL OR char_length(note) <= 500)"),
+    ],
+  },
 ];
 
 /**
