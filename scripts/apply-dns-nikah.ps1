@@ -1,4 +1,4 @@
-# Apply Route 53 DNS records for nikah.arpcloudsolutions.co.za and nikahpath.arpcloudsolutions.co.za pointing to Vercel
+# Apply Route 53 DNS records for nikah, nikkah, and nikahpath subdomains pointing to Vercel
 $ErrorActionPreference = 'Stop'
 $domain = "arpcloudsolutions.co.za"
 
